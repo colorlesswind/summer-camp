@@ -3,16 +3,18 @@ import { pool, withTransaction } from '../db/pool';
 import { isDuplicateEntry } from '../db/mysql-errors';
 import { newId, normalizeEmail } from '../common/crypto';
 import { conflict, internal } from '../common/errors';
-import type { UserRow } from './user.types';
+import type { UserRole, UserRow } from './user.types';
 
 const USER_COLUMNS =
-  'id, primary_email, display_name, email_verified_at, status, created_at, updated_at';
+  'id, primary_email, display_name, email_verified_at, status, role, created_at, updated_at';
 
 export interface CreateUserInput {
   email: string;
   passwordHash?: string;
   displayName?: string | null;
   emailVerifiedAt?: Date | null;
+  /** 默认 student；只有运维/后台建号时才显式指定，注册入参不得透传 */
+  role?: UserRole;
 }
 
 export const usersRepository = {
@@ -40,9 +42,17 @@ export const usersRepository = {
     try {
       await withTransaction(async (conn) => {
         await conn.execute(
-          `INSERT INTO users (id, primary_email, display_name, email_verified_at, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'active', ?, ?)`,
-          [id, email, input.displayName ?? null, input.emailVerifiedAt ?? null, now, now],
+          `INSERT INTO users (id, primary_email, display_name, email_verified_at, status, role, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'active', ?, ?, ?)`,
+          [
+            id,
+            email,
+            input.displayName ?? null,
+            input.emailVerifiedAt ?? null,
+            input.role ?? 'student',
+            now,
+            now,
+          ],
         );
         if (input.passwordHash) {
           await conn.execute(
@@ -73,6 +83,15 @@ export const usersRepository = {
 
   async touch(userId: string): Promise<void> {
     await pool.execute('UPDATE users SET updated_at = ? WHERE id = ?', [new Date(), userId]);
+  },
+
+  /** 角色变更（运维/后台使用）。变更后无需踢会话：authenticate 每次请求实时读库 */
+  async updateRole(userId: string, role: UserRole): Promise<boolean> {
+    const [result] = await pool.execute<ResultSetHeader>(
+      'UPDATE users SET role = ?, updated_at = ? WHERE id = ?',
+      [role, new Date(), userId],
+    );
+    return result.affectedRows > 0;
   },
 };
 

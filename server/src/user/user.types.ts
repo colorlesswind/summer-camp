@@ -2,6 +2,13 @@ import type { RowDataPacket } from 'mysql2/promise';
 
 export type UserStatus = 'active' | 'locked' | 'deleted';
 
+/**
+ * 系统固定三种角色（方案 A：一个账号只有一种角色）。
+ * 身份存 users.role，权限规则写在代码里（form/application.state.ts）。
+ */
+export const USER_ROLES = ['student', 'admin', 'supervisor'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
 /** 认证方式，写入 JWT 的 amr 声明，便于前端/下游区分登录来源。 */
 export type AuthMethod = 'password' | 'otp' | 'github' | 'oidc';
 
@@ -13,6 +20,7 @@ export interface UserRow extends RowDataPacket {
   display_name: string | null;
   email_verified_at: Date | null;
   status: UserStatus;
+  role: UserRole;
   created_at: Date;
   updated_at: Date;
 }
@@ -71,6 +79,11 @@ export interface OAuthStateRow extends RowDataPacket {
 /** 由 authenticate 中间件解析出的登录态。 */
 export interface AuthContext {
   userId: string;
+  /**
+   * 每次请求实时从 users.role 读取，不放进 access token：
+   * 角色被降级/变更后立即生效，不需要等 token 过期或把会话全部踢掉。
+   */
+  role: UserRole;
   jti: string;
   sessionId: string;
   amr: AuthMethod[];
@@ -84,6 +97,8 @@ export interface UserProfile {
   displayName: string | null;
   emailVerified: boolean;
   status: UserStatus;
+  /** 前端据此做按钮显隐；服务端仍然必须自行校验，不能只依赖前端 */
+  role: UserRole;
   createdAt: string;
 }
 
@@ -99,5 +114,6 @@ export const toUserProfile = (row: UserRow): UserProfile => ({
   displayName: row.display_name,
   emailVerified: row.email_verified_at !== null,
   status: row.status,
+  role: row.role,
   createdAt: row.created_at.toISOString(),
 });

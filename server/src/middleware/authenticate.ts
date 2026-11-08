@@ -4,6 +4,7 @@ import { AppError, unauthorized } from '../common/errors';
 import { asyncHandler } from '../common/validate';
 import { tokenService } from '../user/auth/token.service';
 import { jwtDenylistRepository } from '../user/auth/denylist.repository';
+import { usersRepository } from '../user/user.repository';
 
 /** Cookie 优先，其次兼容 Authorization: Bearer（方便 Postman / 服务端调用） */
 export const extractAccessToken = (req: Request): string | null => {
@@ -27,8 +28,16 @@ const resolveAuthContext = async (req: Request) => {
     throw unauthorized('登录状态已失效，请重新登录');
   }
 
+  // 角色不进 token：每次请求读库，保证降权/封禁立即生效。
+  // 认证本身仍然只看 token，这里只是为了拿到 role 与最新 status。
+  const user = await usersRepository.findById(claims.sub);
+  if (!user || user.status !== 'active') {
+    throw unauthorized('账号状态异常，请重新登录');
+  }
+
   return {
     userId: claims.sub,
+    role: user.role,
     jti: claims.jti,
     sessionId: claims.sid,
     amr: claims.amr,
