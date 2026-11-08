@@ -12,7 +12,8 @@ export type AuditEvent =
   | 'password_change'
   | 'oauth_authorize'
   | 'oauth_callback'
-  | 'identity_link';
+  | 'identity_link'
+  | 'bootstrap_account';
 
 export type AuditResult = 'success' | 'failure' | 'duplicate';
 

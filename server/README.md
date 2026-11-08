@@ -44,6 +44,44 @@ docker run -d --name summer-camp-mysql \
 
 > 未配置 `SMTP_HOST` 时，验证码会以 `[DEV MAIL]` 的形式打印在服务端日志里，方便本地调试。
 
+### 预置账号（Admin / Supervisor）
+
+线上用镜像部署时不需要人工注册再改库——启动时会按环境变量幂等创建：
+
+| 变量 | 说明 |
+| --- | --- |
+| `BOOTSTRAP_ON_START` | `true` 时在 `listen` 之前执行 seed；多副本部署请设为 `false`，改用 Job |
+| `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | 唯一管理员 |
+| `BOOTSTRAP_SUPERVISOR_1_EMAIL` / `_PASSWORD` | 督导 1 |
+| `BOOTSTRAP_SUPERVISOR_2_EMAIL` / `_PASSWORD` | 督导 2 |
+| `*_PASSWORD_FILE` | 可选，指向 Docker secret / k8s Secret 文件，优先于明文变量 |
+| `BOOTSTRAP_ENFORCE_ROLE` | 已有账号角色不一致时是否强制纠正，默认只告警 |
+
+行为约定：
+
+- 账号不存在 → 创建（`role` 正确、`email_verified_at` 已填，可直接密码登录）
+- 账号已存在 → **永不覆盖密码**，仅补齐缺失的邮箱验证 / 密码凭证
+- 账号存在但角色不符 → 默认只 WARN，避免 env 泄露变成提权通道
+- 邮箱重复 / EMAIL 与 PASSWORD 不成对 / 密码不足 16 位 → 启动直接失败
+
+手动执行（幂等，可重复）：
+
+```bash
+npm run migrate
+npm run seed:accounts           # 开发（tsx 直跑源码）
+node dist/bootstrap/seed-cli.js # 生产镜像（无 devDependencies）
+```
+
+Docker 镜像里两种接法（任选其一）：
+
+```bash
+# A. 启动时自动 seed
+BOOTSTRAP_ON_START=true node dist/index.js
+
+# B. 多副本：seed 只跑一次，再关掉开关
+node dist/bootstrap/seed-cli.js && BOOTSTRAP_ON_START=false node dist/index.js
+```
+
 ---
 
 ## 3. 目录结构
@@ -54,6 +92,7 @@ server/src
 ├── app.ts                    # express 装配（helmet / cors / cookie / 错误处理）
 ├── routes.ts                 # 根路由：/healthz、/user
 ├── config/                   # 环境变量 zod 校验，配置错误启动即失败
+├── bootstrap/                # 预置 admin / supervisor 账号（幂等 seed）
 ├── db/
 │   ├── pool.ts               # 连接池（UTC、utf8mb4、事务封装）
 │   ├── migrate.ts            # 极简迁移器

@@ -1,9 +1,54 @@
+import fs from 'node:fs';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
+import type { UserRole } from '../user/user.types';
 
 loadEnv();
 
 const booleanString = z.enum(['true', 'false']).transform((v) => v === 'true');
+
+/** .env 里写成 `FOO=` 等同于未配置，避免空字符串触发格式校验 */
+const emptyToUndefined = (value: unknown): unknown =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
+const optionalEmail = z.preprocess(
+  emptyToUndefined,
+  z.string().trim().toLowerCase().email('预置账号邮箱格式不正确').optional(),
+);
+const optionalSecret = z.preprocess(emptyToUndefined, z.string().optional());
+const optionalFilePath = z.preprocess(emptyToUndefined, z.string().optional());
+
+/** 预置账号：由 env 注入，启动时幂等写入 */
+export interface BootstrapAccount {
+  role: UserRole;
+  email: string;
+  password: string;
+}
+
+/** 固定的三个槽位：1 admin + 2 supervisor */
+const BOOTSTRAP_SLOTS = [
+  {
+    name: 'ADMIN',
+    role: 'admin',
+    emailKey: 'BOOTSTRAP_ADMIN_EMAIL',
+    passwordKey: 'BOOTSTRAP_ADMIN_PASSWORD',
+    fileKey: 'BOOTSTRAP_ADMIN_PASSWORD_FILE',
+  },
+  {
+    name: 'SUPERVISOR_1',
+    role: 'supervisor',
+    emailKey: 'BOOTSTRAP_SUPERVISOR_1_EMAIL',
+    passwordKey: 'BOOTSTRAP_SUPERVISOR_1_PASSWORD',
+    fileKey: 'BOOTSTRAP_SUPERVISOR_1_PASSWORD_FILE',
+  },
+  {
+    name: 'SUPERVISOR_2',
+    role: 'supervisor',
+    emailKey: 'BOOTSTRAP_SUPERVISOR_2_EMAIL',
+    passwordKey: 'BOOTSTRAP_SUPERVISOR_2_PASSWORD',
+    fileKey: 'BOOTSTRAP_SUPERVISOR_2_PASSWORD_FILE',
+  },
+] as const;
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -57,6 +102,44 @@ const envSchema = z.object({
   OIDC_SCOPES: z.string().default('openid profile email'),
 
   AUTH_ENFORCE_TRUSTED_ORIGIN: booleanString.default('true'),
+
+  // ---------- 预置账号（bootstrap）----------
+  // 配了 EMAIL 就必须配 PASSWORD 或 PASSWORD_FILE（成对校验见下方 superRefine）
+  BOOTSTRAP_ON_START: booleanString.default('false'),
+  BOOTSTRAP_ENFORCE_ROLE: booleanString.default('false'),
+
+  BOOTSTRAP_ADMIN_EMAIL: optionalEmail,
+  BOOTSTRAP_ADMIN_PASSWORD: optionalSecret,
+  BOOTSTRAP_ADMIN_PASSWORD_FILE: optionalFilePath,
+
+  BOOTSTRAP_SUPERVISOR_1_EMAIL: optionalEmail,
+  BOOTSTRAP_SUPERVISOR_1_PASSWORD: optionalSecret,
+  BOOTSTRAP_SUPERVISOR_1_PASSWORD_FILE: optionalFilePath,
+
+  BOOTSTRAP_SUPERVISOR_2_EMAIL: optionalEmail,
+  BOOTSTRAP_SUPERVISOR_2_PASSWORD: optionalSecret,
+  BOOTSTRAP_SUPERVISOR_2_PASSWORD_FILE: optionalFilePath,
+}).superRefine((value, ctx) => {
+  for (const def of BOOTSTRAP_SLOTS) {
+    const email = value[def.emailKey];
+    const hasPassword =
+      value[def.passwordKey] !== undefined || value[def.fileKey] !== undefined;
+
+    if (email && !hasPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [def.emailKey],
+        message: `配置了 ${def.emailKey} 但缺少 ${def.passwordKey}（或 ${def.fileKey}）`,
+      });
+    }
+    if (!email && hasPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [def.emailKey],
+        message: `配置了 ${def.passwordKey} 但没有 ${def.emailKey}`,
+      });
+    }
+  }
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -69,6 +152,57 @@ if (!parsed.success) {
 }
 
 const raw = parsed.data;
+
+/** 读 Docker secret / k8s Secret 挂载出来的文件；`*_FILE` 优先于明文变量 */
+const readSecretFile = (filePath: string, key: string): string => {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8').trim();
+    if (content.length === 0) throw new Error('文件内容为空');
+    return content;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${key} 指向的文件无法读取（${filePath}）：${reason}\n` +
+        `  提示：本地开发请删除该 *_FILE 变量，直接用明文变量；` +
+        `只有 Docker / k8s 挂载 secret 时才需要它（且它优先于明文密码）`,
+    );
+  }
+};
+
+const buildBootstrapAccounts = (): BootstrapAccount[] => {
+  const accounts: BootstrapAccount[] = [];
+  const seenEmails = new Set<string>();
+
+  for (const def of BOOTSTRAP_SLOTS) {
+    const email = raw[def.emailKey];
+    if (!email) continue;
+
+    const passwordFile = raw[def.fileKey];
+    const password = passwordFile
+      ? readSecretFile(passwordFile, def.fileKey)
+      : raw[def.passwordKey];
+    // 成对校验已在 schema 里做过，这里只是类型兜底
+    if (!password) continue;
+
+    if (password.length < 16) {
+      throw new Error(`${def.passwordKey} 至少需要 16 个字符`);
+    }
+    // bcrypt 只使用前 72 字节，超长会被静默截断，直接报错更安全
+    if (Buffer.byteLength(password, 'utf8') > 72) {
+      throw new Error(`${def.passwordKey} 超过 bcrypt 的 72 字节上限`);
+    }
+    if (seenEmails.has(email)) {
+      throw new Error(`预置账号邮箱重复：${email}`);
+    }
+
+    seenEmails.add(email);
+    accounts.push({ role: def.role, email, password });
+  }
+
+  return accounts;
+};
+
+const bootstrapAccounts = buildBootstrapAccounts();
 
 const corsOrigins = raw.CORS_ORIGINS.split(',')
   .map((item) => item.trim())
@@ -152,6 +286,14 @@ export const env = {
 
   auth: {
     enforceTrustedOrigin: raw.AUTH_ENFORCE_TRUSTED_ORIGIN,
+  },
+
+  bootstrap: {
+    /** 启动时自动 seed（多副本部署请关掉，改用 npm run seed:accounts） */
+    onStart: raw.BOOTSTRAP_ON_START,
+    /** 已有账号角色不一致时是否强制纠正；默认只 WARN 不修改 */
+    enforceRole: raw.BOOTSTRAP_ENFORCE_ROLE,
+    accounts: bootstrapAccounts,
   },
 } as const;
 
