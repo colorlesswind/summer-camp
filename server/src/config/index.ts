@@ -80,7 +80,7 @@ const envSchema = z.object({
 
   PASSWORD_HASH_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   OTP_SECRET: z.string().min(16, 'OTP_SECRET 至少需要 16 个字符'),
-  OTP_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  OTP_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 

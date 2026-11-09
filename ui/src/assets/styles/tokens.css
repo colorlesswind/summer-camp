@@ -1,0 +1,24 @@
+:root {
+  /* 取自 resource/logo.png 的主色 */
+  --brand-navy: #003476;
+  --brand-gold: #aa8421;
+  --brand-blue: #1677ff;
+
+  --color-text: #1f1f1f;
+  --color-text-secondary: #595959;
+  --color-border: #d9d9d9;
+  --color-divider: #e8e8e8;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+
+  --header-height: 80px;
+  --auth-card-width: 508px;
+  --auth-card-padding: 32px 40px 36px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --header-height: 64px;
+    --auth-card-padding: 24px 20px 28px;
+  }
+}

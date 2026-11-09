@@ -179,7 +179,7 @@ sequenceDiagram
   SPA->>API: POST /user/otp {email, purpose:"logon"}
   API->>DB: 写入 otp_challenges（只存 HMAC）
   API->>Mail: 发送 6 位数字验证码
-  API-->>SPA: 202 {accepted:true, expiresInSeconds:600}
+  API-->>SPA: 202 {accepted:true, expiresInSeconds:3600}
 
   SPA->>API: POST /user/logon {grant_type:"otp", email, otp}
   API->>DB: 校验并消费验证码
@@ -267,7 +267,7 @@ POST /user/otp
 
 ```http
 HTTP/1.1 202 Accepted
-{ "accepted": true, "expiresInSeconds": 600 }
+{ "accepted": true, "expiresInSeconds": 3600 }
 ```
 
 ### 5.3 登录
@@ -372,7 +372,7 @@ POST /user/password/change
 | --- | --- |
 | 密码 | bcrypt cost 12；bcryptjs 纯 JS 免编译，换 argon2id 只需改 `password.service.ts` |
 | 时序攻击 | 账号不存在时也执行一次 dummy compare |
-| 验证码 | HMAC-SHA256 落库、6 位、10 分钟、单次消费、错误 5 次作废、60 秒重发冷却 |
+| 验证码 | HMAC-SHA256 落库、6 位、1 小时、单次消费、错误 5 次作废、60 秒重发冷却 |
 | 账号枚举 | 注册/发码统一 202；登录失败统一 `invalid_grant` |
 | 限流 | `rate_limit_events` 滑动窗口，按 email + IP 双维度；登录成功清零 |
 | JWT | HS256、`iss/aud/exp/nbf` 全校验、`jti`、`sid`、`amr`、15 分钟有效期 |
