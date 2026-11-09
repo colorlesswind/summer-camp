@@ -20,6 +20,10 @@ const props = withDefaults(
     programCode?: string | null;
     excludeSupervisorId?: number | null;
     excludeOptionValue?: string | number | null;
+    /** control=表单控件（默认）；text=只读文本，用于管理端/导师端审阅 */
+    presentation?: 'control' | 'text';
+    /** text 模式下由调用方提供的展示文案（如导师姓名无法从 schema 解析时） */
+    valueLabel?: string | null;
   }>(),
   {
     disabled: false,
@@ -27,6 +31,8 @@ const props = withDefaults(
     programCode: null,
     excludeSupervisorId: null,
     excludeOptionValue: null,
+    presentation: 'control',
+    valueLabel: null,
   },
 );
 
@@ -118,11 +124,64 @@ function onNumber(value: number | string | null): void {
 function onInput(value: string | number): void {
   emit('update:modelValue', typeof value === 'string' ? value : String(value));
 }
+
+/**
+ * 只读文本模式：把值解析成适合审阅的文案。
+ * 选项类字段优先用 valueLabel（外部已解析，如导师姓名），否则按 schema 选项反查。
+ */
+const textValue = computed<string | null>(() => {
+  const raw = props.modelValue;
+  if (raw === null || raw === undefined || (typeof raw === 'string' && raw.trim() === '')) {
+    return null;
+  }
+  if (props.valueLabel) return props.valueLabel;
+
+  switch (props.field.widget) {
+    case 'single_choice': {
+      if (props.field.valueType === 'boolean') {
+        return raw === true || raw === 'true' ? 'Yes' : 'No';
+      }
+      const options =
+        props.field.optionsSource === 'programs'
+          ? props.schema.enums.programs
+          : (props.field.options ?? []);
+      const match = options.find((item) => String(item.value) === String(raw));
+      return match?.labelEn ?? String(raw);
+    }
+    case 'checkbox':
+      return raw === true || raw === 'true' ? 'Yes' : 'No';
+    case 'date':
+      return String(raw).slice(0, 10);
+    case 'number':
+      return String(raw);
+    default:
+      return String(raw);
+  }
+});
+
+const textHref = computed<string | null>(() => {
+  if (props.field.widget !== 'url' || !textValue.value) return null;
+  return /^https?:\/\/\S+$/i.test(textValue.value) ? textValue.value : null;
+});
 </script>
 
 <template>
+  <template v-if="presentation === 'text'">
+    <span v-if="textValue === null" class="form-field__text form-field__text--empty">—</span>
+    <a
+      v-else-if="textHref"
+      class="form-field__text form-field__text--link"
+      :href="textHref"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {{ textValue }}
+    </a>
+    <span v-else class="form-field__text">{{ textValue }}</span>
+  </template>
+
   <SupervisorSelect
-    v-if="field.widget === 'single_choice' && field.optionsSource === 'supervisors_by_thrust'"
+    v-else-if="field.widget === 'single_choice' && field.optionsSource === 'supervisors_by_thrust'"
     :model-value="supervisorValue"
     :program-code="programCode"
     :exclude-id="excludeSupervisorId"

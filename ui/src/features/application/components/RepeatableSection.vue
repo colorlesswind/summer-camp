@@ -15,8 +15,10 @@ const props = withDefaults(
     rows: RepeatableRow[];
     disabled?: boolean;
     rowErrors: Record<string, string>;
+    presentation?: 'control' | 'text';
+    valueLabels?: Record<string, string>;
   }>(),
-  { disabled: false },
+  { disabled: false, presentation: 'control', valueLabels: () => ({}) },
 );
 
 const emit = defineEmits<{
@@ -61,7 +63,13 @@ function programCodeFor(field: FormFieldConfig, row: RepeatableRow): string | nu
             <th v-if="!disabled" class="repeat-table__action">Action</th>
             <th v-for="column in columns" :key="column.key">
               {{ column.label }}
-              <span v-if="columnRequired(column)" class="form-field__required" aria-hidden="true">*</span>
+              <span
+                v-if="columnRequired(column) && presentation !== 'text'"
+                class="form-field__required"
+                aria-hidden="true"
+              >
+                *
+              </span>
             </th>
           </tr>
         </thead>
@@ -89,6 +97,8 @@ function programCodeFor(field: FormFieldConfig, row: RepeatableRow): string | nu
                     :disabled="disabled"
                     :compact="true"
                     :program-code="programCodeFor(field, row)"
+                    :presentation="presentation"
+                    :value-label="valueLabels[field.code] ?? null"
                     @update:model-value="setValue(row, field, $event)"
                   />
                   <p v-if="errorFor(index, field)" class="form-field__error">

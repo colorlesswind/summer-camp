@@ -7,17 +7,19 @@ import type {
   ApplicationStatus,
   FormFieldConfig,
   FormSchema,
-  FormSectionConfig,
   FormValues,
 } from '@/types/application';
 import type { FieldIssue } from '@/types/api';
+import {
+  hydrateValue,
+  isNil,
+  makeRow,
+  payloadValue,
+  type RepeatableRow,
+} from '../form-values';
 import { APPLICATION_MESSAGES, issueMessage } from '../messages';
 
-export interface RepeatableRow {
-  /** 仅前端使用的稳定 key，提交前会剔除 */
-  _key: string;
-  [code: string]: unknown;
-}
+export type { RepeatableRow } from '../form-values';
 
 interface IssueLike {
   path: string;
@@ -29,59 +31,6 @@ type ParsedIssuePath =
   | { kind: 'scalar'; code: string }
   | { kind: 'row'; sectionCode: string; index: number; code: string }
   | null;
-
-const makeKey = (): string =>
-  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-
-const isNil = (value: unknown): boolean =>
-  value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
-
-const hydrateValue = (field: FormFieldConfig, raw: unknown): unknown => {
-  if (raw === null || raw === undefined) return null;
-  switch (field.valueType) {
-    case 'boolean':
-      return raw === true || raw === 'true';
-    case 'number': {
-      const parsed = typeof raw === 'number' ? raw : Number(raw);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    case 'date': {
-      const text = String(raw);
-      return text.length >= 10 ? text.slice(0, 10) : null;
-    }
-    default:
-      return typeof raw === 'string' ? raw : String(raw);
-  }
-};
-
-const payloadValue = (field: FormFieldConfig, raw: unknown): unknown => {
-  if (raw === null || raw === undefined) return null;
-  switch (field.valueType) {
-    case 'boolean':
-      return raw === true || raw === 'true';
-    case 'number': {
-      const parsed = typeof raw === 'number' ? raw : Number(raw);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    case 'date': {
-      const text = String(raw).slice(0, 10);
-      return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
-    }
-    default: {
-      const text = String(raw).trim();
-      return text === '' ? null : text;
-    }
-  }
-};
-
-const makeRow = (section: FormSectionConfig, raw: unknown): RepeatableRow => {
-  const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const row: RepeatableRow = { _key: makeKey() };
-  for (const field of section.fields) {
-    row[field.code] = hydrateValue(field, source[field.code]);
-  }
-  return row;
-};
 
 export interface UseApplicationForm {
   schema: Ref<FormSchema | null>;

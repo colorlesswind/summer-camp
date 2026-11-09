@@ -154,3 +154,26 @@ export interface SupervisorOption {
   thrustCode: string;
   deptNameEn: string;
 }
+
+/** 批量 Send Offer 的失败明细（与 server form.service.ts 对齐） */
+export interface BatchFailure {
+  id: string;
+  applicationNumber: string | null;
+  code: string;
+  message: string;
+}
+
+export interface BatchOfferResult {
+  total: number;
+  successCount: number;
+  failureCount: number;
+  failures: BatchFailure[];
+}
+
+/** 管理端列表查询参数（status 单选；服务端支持多选，UI 暂不暴露） */
+export interface ApplicationListQuery {
+  status?: ApplicationStatus;
+  keyword?: string;
+  page?: number;
+  pageSize?: number;
+}

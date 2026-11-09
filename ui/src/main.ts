@@ -9,6 +9,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Pagination,
   Result,
   Select,
   Spin,
@@ -37,6 +38,7 @@ app.use(Form);
 app.use(Input);
 app.use(InputNumber);
 app.use(Modal);
+app.use(Pagination);
 app.use(Result);
 app.use(Select);
 app.use(Spin);

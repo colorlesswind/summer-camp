@@ -3,7 +3,7 @@
 ```
 summer-camp
 ├── server/   # Express + TypeScript 服务端（认证 /user + 申请表 /form，接口见 server/README.md）
-└── ui/       # Vue 3 + Vite 前端 SPA（登录 / 学生申请表 / Application Status；管理端与导师端待实现）
+└── ui/       # Vue 3 + Vite 前端 SPA（登录 / 学生申请表 / Application Status / 管理端；导师端待实现）
 ```
 
 ## 服务端
@@ -41,3 +41,12 @@ npm run dev        # http://localhost:5173
 - `Due Date` 列按本次确认保留占位（需求未定义业务逻辑），值固定为 `-`，不实现相关功能。
 
 界面截图见 `ui/.screenshots/status-*.png`（Draft、Pending for Update、Pending for Offer Acceptance + Respond 弹窗、Offer Declined、无申请占位行）。
+
+## 管理端（Admin）
+
+管理端对应笔试题 §2.2，管理员登录后落地 `/admin/applications`：
+
+- **列表**：表格容器顶栏内置 `Status` 筛选（9 个状态全称）+ 关键词搜索 + 批量 Send Offer；筛选条件写入 URL（刷新 / 返回可还原），支持分页 20/50/100。
+- **动作**：`PendingForPreliminaryScreening` 可 `Approve` / `Return`（原因必填）；`SupervisorRecommended` 可单条 `Send Offer` 或勾选批量（结果返回成功数 / 失败数 / 失败原因）。
+- **详情**：字段只读（`presentation="text"`，长文本完整换行），带摘要、退回原因、Status History 与粘底操作条。
+- 前端细节见 [ui/README.md](./ui/README.md) 的「管理端（Admin）」，方案与取舍见 [docs/admin-plan.md](./docs/admin-plan.md)。

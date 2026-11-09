@@ -192,6 +192,30 @@
   color: #8c8c8c;
 }
 
+/* 管理端/导师端只读文本（presentation="text"）：长文本完整换行，不截断 */
+.form-field__text {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.form-field__text--empty {
+  color: #8c8c8c;
+}
+
+.form-field__text--link {
+  color: var(--brand-blue);
+  text-decoration: none;
+}
+
+.form-field__text--link:hover {
+  text-decoration: underline;
+}
+
 /* 控件宽度统一撑满字段容器；日期/下拉/数字输入框共用 */
 .application-form .ant-input,
 .application-form .ant-input-number,
@@ -300,6 +324,22 @@
   font-size: 13px;
   line-height: 1.55;
   color: var(--color-text);
+}
+
+.statement-item__value {
+  margin: 0;
+}
+
+.statement-item__agreed {
+  font-size: 13px;
+  font-weight: 600;
+  color: #389e0d;
+}
+
+.statement-item__declined {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cf1322;
 }
 
 /* -------------------------------------------------------------------------- */

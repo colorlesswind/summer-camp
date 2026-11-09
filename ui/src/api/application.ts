@@ -1,7 +1,9 @@
 import { http } from './http';
 import type {
   ApplicationDetail,
+  ApplicationListQuery,
   ApplicationListResult,
+  BatchOfferResult,
   FormSchema,
   FormValues,
   SupervisorOption,
@@ -80,6 +82,58 @@ export const applicationApi = {
     const { data } = await http.get<ApiEnvelope<ApplicationListResult>>('/form/applications', {
       params: { page, pageSize },
     });
+    return unwrap(data);
+  },
+
+  /**
+   * 管理端列表：服务端按角色收窄（admin=全部），支持 status/keyword/分页。
+   * 状态筛选为单选，与 UI 的下拉一致。
+   */
+  async list(query: ApplicationListQuery = {}): Promise<ApplicationListResult> {
+    const { data } = await http.get<ApiEnvelope<ApplicationListResult>>('/form/applications', {
+      params: {
+        status: query.status,
+        keyword: query.keyword,
+        page: query.page,
+        pageSize: query.pageSize,
+      },
+    });
+    return unwrap(data);
+  },
+
+  /** 管理员 Approve：PendingForPreliminaryScreening -> PendingSupervisorReview */
+  async approve(id: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/approve`,
+    );
+    return unwrap(data);
+  },
+
+  /** 管理员 Return：PendingForPreliminaryScreening -> Returned，原因必填 */
+  async returnToStudent(id: string, reason: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/return`,
+      { reason },
+    );
+    return unwrap(data);
+  },
+
+  /** 管理员单条 Send Offer：SupervisorRecommended -> OfferSent */
+  async sendOffer(id: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/send-offer`,
+    );
+    return unwrap(data);
+  },
+
+  /** 管理员批量 Send Offer：并行处理，返回成功/失败数量与失败明细 */
+  async sendOfferBatch(ids: readonly string[]): Promise<BatchOfferResult> {
+    const { data } = await http.post<ApiEnvelope<BatchOfferResult>>(
+      '/form/offers/batch',
+      { ids },
+      // 单条 3s 超时 + 并发 10，最坏情况会超过默认 15s，这里单独放宽
+      { timeout: 60_000 },
+    );
     return unwrap(data);
   },
 

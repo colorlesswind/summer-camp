@@ -2,7 +2,7 @@
 
 港科大（广州）夏令营报名系统的前端 SPA：Vue 3 + TypeScript + Vite + Ant Design Vue 4 + Vue Router 4 + Pinia + axios。
 
-当前阶段已完成登录页、学生端申请表（配置驱动、Save / Submit / Resubmit、只读状态）与 Application Status 表格页（状态 / 退回原因 / 动作 / 时间，Accept / Decline 带二次确认）；管理端、导师端的列表与审核页面仍以占位页预留，下一阶段填充。
+当前阶段已完成登录页、学生端申请表（配置驱动、Save / Submit / Resubmit、只读状态）、Application Status 表格页（状态 / 退回原因 / 动作 / 时间，Accept / Decline 带二次确认），以及管理端申请列表与详情（status 筛选、Approve / Return、单条与批量 Send Offer、字段只读审阅）；导师端列表与审核页面仍以占位页预留，下一阶段填充。
 
 ## 快速开始
 
@@ -69,10 +69,17 @@ ui/
 │   │   ├── components/            # FormField、FormFieldGroup、RepeatableSection、StatementSection、SectionNav、StudentSidebar
 │   │   ├── composables/           # useApplicationForm、useSectionScrollSpy
 │   │   ├── field-groups.ts        # group_code 合并成一行/一列
+│   │   ├── form-values.ts         # hydrate / payload 纯函数（学生端与管理端共用）
 │   │   ├── messages.ts            # 页面文案与字段级错误翻译
 │   │   └── styles/                # application-shell.css（学生端共用外壳）、application-form.css
+│   ├── features/admin/
+│   │   ├── views/                 # AdminApplicationsView（列表）、AdminApplicationDetailView（详情）
+│   │   ├── components/            # 筛选栏、表格、Return 弹窗、批量结果、只读表单、Status History
+│   │   ├── composables/           # useAdminApplications、useAdminApplicationDetail
+│   │   ├── messages.ts            # 管理端英文文案与状态说明
+│   │   └── styles/admin.css       # 管理端列表 / 详情样式
 │   ├── layouts/                   # AuthLayout / MainLayout（支持 fullBleed）
-│   ├── pages/                     # 403、404、管理端/导师端占位页
+│   ├── pages/                     # 403、404、导师端占位页
 │   ├── router/                    # 路由表与守卫
 │   ├── stores/auth.ts             # 会话状态与登录动作
 │   ├── types/                     # 与后端对齐的 DTO（user / application / api）
@@ -85,8 +92,7 @@ ui/
 下一阶段会在 `features/` 下新增：
 
 ```text
-features/admin/         # 管理端：列表筛选、详情审核、批量 Send Offer
-features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
+features/supervisor/     # 导师端：名下申请列表、Recommend / Reject
 ```
 
 ## 路由
@@ -99,8 +105,8 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 | `/applications`                 | student    | Application Status 表格（状态 / 退回原因 / 动作 / 时间） |
 | `/applications/new`             | student    | 新建申请表；已有申请时自动跳到详情 |
 | `/applications/:id`             | student    | 单页申请表（配置驱动，按状态只读） |
-| `/admin/applications`           | admin      | 占位：申请列表                    |
-| `/admin/applications/:id`       | admin      | 占位：申请详情                    |
+| `/admin/applications`           | admin      | 申请列表：status 筛选、关键词搜索、分页、批量 Send Offer |
+| `/admin/applications/:id`       | admin      | 申请详情：字段只读 + Approve / Return / Send Offer |
 | `/supervisor/applications`      | supervisor | 占位：分配给当前导师的申请        |
 | `/supervisor/applications/:id`  | supervisor | 占位：申请详情                    |
 | `/403` `/404`                   | 公开       | 错误页                            |
@@ -142,6 +148,19 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 - **退回原因**：`Pending for Update` 行展示该次退回的 `Return Reason:` + 原因全文（历史行用它自己那次 Return 的备注）。
 - **Due Date**：按本次确认保留该列占位，不承载业务逻辑，值固定 `-`。
 - **reserved 状态**：附件里的 Action Required: Confirm Attendance / Attendance Confirmed / Attendance Declined / Offer Lapsed / Reject Letter Sent / Withdrawn 本期不实现，仅在 `constants/application.ts` 的 `RESERVED_STATUS_META` 登记文案（灰色 tone），不参与状态匹配，页面不渲染这些行。
+
+## 管理端（Admin）
+
+管理端对应需求 §2.2，路由 `/admin/applications`（列表）与 `/admin/applications/:id`（详情），代码在 `features/admin/`。
+
+- **布局**：沿用 `MainLayout`（顶部品牌栏 + 当前账号 / 角色 / 登出），不加左侧栏。筛选器是表格容器自己的顶栏：`Status 下拉 + 关键词搜索 + Reset + 批量 Send Offer`，与表格、分页共用同一个 1px 边框容器，视觉沿用学生端表格的细线、13px 与 `#fafafa` 表头。
+- **URL 即筛选状态**：`?status=SupervisorRecommended&keyword=zhang&page=2&pageSize=20`。刷新、浏览器前进/后退、从详情返回都能还原；关键词 300ms 防抖；换筛选或换页清空批量选择。
+- **列**：选择、Application No.（链接进详情）、Applicant（姓名 + 邮箱）、First Choice、Second Choice、Status（Tag，文案取服务端 `displayStatus`）、Last Updated、Action。
+- **动作矩阵**：`PendingForPreliminaryScreening` → `Approve`（二次确认）/ `Return`（原因必填弹窗，max 1000）；`SupervisorRecommended` → `Send Offer`（单条二次确认）且可勾选批量；其余状态只读。列表行与详情页共用同一套规则，按钮显隐以详情 `actions` 为准，服务端仍会二次校验。
+- **批量 Send Offer**：只允许勾选 `SupervisorRecommended`，仅作用于当前页；调用 `POST /form/offers/batch`，成功数 / 失败数 / 失败明细用弹窗展示，失败原因按 `code` 翻译为英文。
+- **详情**：返回链接 + 编号 / 状态 Tag + 申请人 / 提交时间 + 摘要（两个志愿、评审导师、最近更新时间）+ 退回原因提示 + 吸顶分节导航 + 只读表单 + Status History + **粘底操作条**（长表单读到底仍可操作）。
+- **只读渲染**：`FormField` 新增 `presentation="text"`（默认 `control`，学生端行为不变）：长文本完整换行、选项显示 label、日期格式化、URL 可点击、声明显示 Agreed / Not agreed，避免把 8000 字个人陈述压进灰色 textarea。
+- 管理端状态文案 / 颜色在 `constants/application.ts` 的 `STAFF_STATUS_META`，已与服务端 `form/form.display.ts` 的 `STAFF_DISPLAY` 对齐。
 
 ## 登录说明
 
@@ -204,8 +223,8 @@ server {
 ## 约定与后续
 
 - Ant Design Vue 采用**按需注册**（见 `src/main.ts`）；新增页面用到新组件时在 `main.ts` 追加 `app.use(...)`。
-- 所有 UI 文案为英文；登录文案在 `features/auth/messages.ts`，申请表文案在 `features/application/messages.ts`。
-- 学生端状态文案、Tag 颜色与表格色调在 `constants/application.ts`（`STUDENT_STATUS_META`，label 与服务端 `displayStatus` 一致）；未实现的 6 个附件状态登记在 `RESERVED_STATUS_META`（灰色，reserved）；管理端/导师端文案下一阶段再加。
-- 申请表只读渲染当前用 disabled 控件，方便 admin/supervisor 直接复用同一套表单；下一阶段如需要更适合审阅的长文本换行展示，可在 `FormField` 增加 `presentation: 'readonly'` 分支。
-- 占位页（`pages/PlaceholderView.vue`）仍用于管理端/导师端，完成对应页面后删除。
+- 所有 UI 文案为英文；登录文案在 `features/auth/messages.ts`，申请表文案在 `features/application/messages.ts`，管理端文案在 `features/admin/messages.ts`。
+- 学生端状态文案、Tag 颜色与表格色调在 `constants/application.ts`（`STUDENT_STATUS_META`）；管理端状态文案与颜色在同文件的 `STAFF_STATUS_META`（对齐服务端 `STAFF_DISPLAY`）；未实现的 6 个附件状态登记在 `RESERVED_STATUS_META`（灰色，reserved）。
+- 只读审阅用 `FormField` 的 `presentation="text"`（默认 `control`）；学生端只读仍用 disabled 控件，行为不变。
+- 占位页（`pages/PlaceholderView.vue`）目前仅用于导师端，完成导师页面后删除。
 - 未引入 i18n 库，因为当前只要求英文界面。

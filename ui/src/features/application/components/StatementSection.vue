@@ -10,8 +10,9 @@ const props = withDefaults(
     values: FormValues;
     disabled?: boolean;
     errors: Record<string, string>;
+    presentation?: 'control' | 'text';
   }>(),
-  { disabled: false },
+  { disabled: false, presentation: 'control' },
 );
 
 const statementByField = computed(() => {
@@ -36,7 +37,17 @@ function onCheck(field: FormFieldConfig, event: { target?: { checked?: boolean }
 
     <div class="statement-list">
       <div v-for="field in section.fields" :key="field.code" class="statement-item">
+        <template v-if="presentation === 'text'">
+          <p class="statement-item__text">{{ statementText(field) }}</p>
+          <p class="statement-item__value">
+            <span :class="values[field.code] ? 'statement-item__agreed' : 'statement-item__declined'">
+              {{ values[field.code] ? 'Agreed' : 'Not agreed' }}
+            </span>
+          </p>
+        </template>
+
         <a-checkbox
+          v-else
           :checked="Boolean(values[field.code])"
           :disabled="disabled"
           @change="onCheck(field, $event)"

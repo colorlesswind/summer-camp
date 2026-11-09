@@ -12,8 +12,11 @@ const props = withDefaults(
     disabled?: boolean;
     errors: Record<string, string>;
     required?: boolean;
+    presentation?: 'control' | 'text';
+    /** text 模式：按字段 code 提供的展示文案 */
+    valueLabels?: Record<string, string>;
   }>(),
-  { disabled: false, required: false },
+  { disabled: false, required: false, presentation: 'control', valueLabels: () => ({}) },
 );
 
 const isWide = computed(() => props.group.fields.some((field) => field.widget === 'long_text'));
@@ -58,7 +61,13 @@ function excludeOptionFor(field: FormFieldConfig): string | number | null {
   <div class="form-field" :class="{ 'form-field--wide': isWide }">
     <label class="form-field__label">
       {{ group.label }}
-      <span v-if="required" class="form-field__required" aria-hidden="true">*</span>
+      <span
+        v-if="required && presentation !== 'text'"
+        class="form-field__required"
+        aria-hidden="true"
+      >
+        *
+      </span>
     </label>
 
     <div class="form-field__controls">
@@ -73,6 +82,8 @@ function excludeOptionFor(field: FormFieldConfig): string | number | null {
           :program-code="programCodeFor(field)"
           :exclude-supervisor-id="excludeSupervisorFor(field)"
           :exclude-option-value="excludeOptionFor(field)"
+          :presentation="presentation"
+          :value-label="valueLabels[field.code] ?? null"
           @update:model-value="setValue(field.code, $event)"
         />
 
@@ -80,6 +91,8 @@ function excludeOptionFor(field: FormFieldConfig): string | number | null {
       </div>
     </div>
 
-    <p v-if="groupHint && !hasAnyError" class="form-field__hint">{{ groupHint }}</p>
+    <p v-if="groupHint && !hasAnyError && presentation !== 'text'" class="form-field__hint">
+      {{ groupHint }}
+    </p>
   </div>
 </template>

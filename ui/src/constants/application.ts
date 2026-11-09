@@ -1,4 +1,4 @@
-import type { ApplicationStatus } from '@/types/application';
+import { APPLICATION_STATUSES, type ApplicationStatus } from '@/types/application';
 
 /**
  * 状态文字色调，与附件 application-status.png 一致：
@@ -33,6 +33,39 @@ export const STUDENT_STATUS_META: Record<ApplicationStatus, StatusMeta> = {
   OfferAccepted: { label: 'Offer Accepted', color: 'green', tone: 'default' },
   OfferDeclined: { label: 'Offer Declined', color: 'red', tone: 'muted' },
 };
+
+/**
+ * 管理端 / 导师端状态文案与 Tag 颜色。
+ *
+ * label 必须与服务端 form/form.display.ts 的 STAFF_DISPLAY 完全一致（含 `For` 的大写）：
+ * 列表与详情的展示优先用服务端返回的 displayStatus，这里主要给「筛选下拉」和
+ * Status History 里的历史状态做映射。
+ */
+export interface StaffStatusMeta {
+  label: string;
+  color: string;
+}
+
+export const STAFF_STATUS_META: Record<ApplicationStatus, StaffStatusMeta> = {
+  Draft: { label: 'Draft', color: 'default' },
+  PendingForPreliminaryScreening: { label: 'Pending For Preliminary Screening', color: 'blue' },
+  Returned: { label: 'Returned', color: 'orange' },
+  PendingSupervisorReview: { label: 'Pending Supervisor Review', color: 'blue' },
+  SupervisorRecommended: { label: 'Supervisor Recommended', color: 'green' },
+  SupervisorRejected: { label: 'Supervisor Rejected', color: 'red' },
+  OfferSent: { label: 'Offer Sent', color: 'gold' },
+  OfferAccepted: { label: 'Offer Accepted', color: 'green' },
+  OfferDeclined: { label: 'Offer Declined', color: 'red' },
+};
+
+/** 筛选下拉的 9 个选项（顺序与状态机一致） */
+export const STAFF_STATUS_OPTIONS = APPLICATION_STATUSES.map((status) => ({
+  value: status,
+  label: STAFF_STATUS_META[status].label,
+}));
+
+export const staffStatusLabel = (status: string): string =>
+  (STAFF_STATUS_META as Record<string, StaffStatusMeta | undefined>)[status]?.label ?? status;
 
 /**
  * 附件 application-status.png 里出现、但本期未实现的状态（reserved）。

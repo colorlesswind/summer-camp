@@ -25,6 +25,9 @@ const PlaceholderView = () => import('@/pages/PlaceholderView.vue');
 const StudentEntryView = () => import('@/features/application/views/StudentEntryView.vue');
 const ApplicationStatusView = () => import('@/features/application/views/ApplicationStatusView.vue');
 const ApplicationFormView = () => import('@/features/application/views/ApplicationFormView.vue');
+const AdminApplicationsView = () => import('@/features/admin/views/AdminApplicationsView.vue');
+const AdminApplicationDetailView = () =>
+  import('@/features/admin/views/AdminApplicationDetailView.vue');
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -91,13 +94,13 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'admin/applications',
         name: 'admin-applications',
-        component: PlaceholderView,
+        component: AdminApplicationsView,
         meta: { roles: ['admin'], title: 'Applications' },
       },
       {
         path: 'admin/applications/:id',
         name: 'admin-application-detail',
-        component: PlaceholderView,
+        component: AdminApplicationDetailView,
         meta: { roles: ['admin'], title: 'Application Detail' },
       },
       {
