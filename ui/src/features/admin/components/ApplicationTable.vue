@@ -2,8 +2,9 @@
 import { computed } from 'vue';
 import { STAFF_STATUS_META } from '@/constants/application';
 import type { ApplicationStatus, ApplicationSummary } from '@/types/application';
+import { formatDateTime } from '@/features/staff/messages';
 import { canSendOffer } from '../composables/useAdminApplications';
-import { ADMIN_MESSAGES, formatDateTime } from '../messages';
+import { ADMIN_MESSAGES } from '../messages';
 
 interface CheckboxChangeEventLike {
   target?: { checked?: boolean };
@@ -77,16 +78,16 @@ function statusColor(status: ApplicationStatus): string {
 </script>
 
 <template>
-  <div class="admin-table-wrap">
-    <div v-if="loading && items.length === 0" class="admin-table__state">
+  <div class="staff-table-wrap">
+    <div v-if="loading && items.length === 0" class="staff-table__state">
       <a-spin size="large" />
-      <p class="admin-table__state-text">{{ ADMIN_MESSAGES.loading }}</p>
+      <p class="staff-table__state-text">{{ ADMIN_MESSAGES.loading }}</p>
     </div>
 
-    <table v-else class="admin-table">
+    <table v-else class="staff-table">
       <thead>
         <tr>
-          <th class="admin-table__select">
+          <th class="staff-table__select">
             <a-checkbox
               :checked="allSelected"
               :indeterminate="someSelected"
@@ -118,14 +119,14 @@ function statusColor(status: ApplicationStatus): string {
           </td>
           <td>
             <router-link
-              class="admin-table__link"
+              class="staff-table__link"
               :to="{ name: 'admin-application-detail', params: { id: item.id } }"
             >
               {{ item.applicationNumber }}
             </router-link>
           </td>
           <td>
-            <span class="admin-table__applicant">
+            <span class="staff-table__applicant">
               <strong>{{ item.nameEn || '—' }}</strong>
               <span>{{ item.email }}</span>
             </span>
@@ -135,9 +136,9 @@ function statusColor(status: ApplicationStatus): string {
           <td>
             <a-tag :color="statusColor(item.status)">{{ item.displayStatus }}</a-tag>
           </td>
-          <td class="admin-table__time">{{ formatDateTime(item.updatedAt) }}</td>
+          <td class="staff-table__time">{{ formatDateTime(item.updatedAt) }}</td>
           <td>
-            <div class="admin-table__actions">
+            <div class="staff-table__actions">
               <template v-if="item.status === 'PendingForPreliminaryScreening'">
                 <a-button
                   type="primary"
@@ -166,7 +167,7 @@ function statusColor(status: ApplicationStatus): string {
         </tr>
 
         <tr v-if="!loading && items.length === 0">
-          <td colspan="8" class="admin-table__empty">
+          <td colspan="8" class="staff-table__empty">
             <p>
               {{ hasFilters ? ADMIN_MESSAGES.filter.empty : ADMIN_MESSAGES.filter.emptyAll }}
             </p>

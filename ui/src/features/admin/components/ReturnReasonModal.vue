@@ -55,11 +55,11 @@ function confirm(): void {
     @ok="confirm"
     @cancel="close"
   >
-    <p v-if="applicationNumber" class="admin-modal__target">
+    <p v-if="applicationNumber" class="staff-modal__target">
       Application {{ applicationNumber }}
     </p>
 
-    <label class="admin-modal__label" for="admin-return-reason">
+    <label class="staff-modal__label" for="admin-return-reason">
       {{ ADMIN_MESSAGES.return.reasonLabel }}
     </label>
     <a-textarea
@@ -73,6 +73,6 @@ function confirm(): void {
       :status="invalid ? 'error' : undefined"
       @blur="touched = true"
     />
-    <p v-if="invalid" class="admin-modal__error">{{ ADMIN_MESSAGES.return.required }}</p>
+    <p v-if="invalid" class="staff-modal__error">{{ ADMIN_MESSAGES.return.required }}</p>
   </a-modal>
 </template>

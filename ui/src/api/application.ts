@@ -137,6 +137,24 @@ export const applicationApi = {
     return unwrap(data);
   },
 
+  /** 导师 Recommend：PendingSupervisorReview -> SupervisorRecommended，备注可选 */
+  async recommend(id: string, reason?: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/recommend`,
+      { reason: reason?.trim() ? reason.trim() : undefined },
+    );
+    return unwrap(data);
+  },
+
+  /** 导师 Reject：PendingSupervisorReview -> SupervisorRejected，备注可选 */
+  async reject(id: string, reason?: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/reject`,
+      { reason: reason?.trim() ? reason.trim() : undefined },
+    );
+    return unwrap(data);
+  },
+
   /** 志愿导师候选：按 Program 过滤，keyword 走模糊搜索 */
   async searchSupervisors(programCode: string, keyword: string, limit = 50): Promise<SupervisorOption[]> {
     const { data } = await http.get<ApiEnvelope<{ items: SupervisorOption[] }>>('/form/supervisors', {

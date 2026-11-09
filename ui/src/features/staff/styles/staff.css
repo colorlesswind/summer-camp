@@ -1,26 +1,26 @@
 /*
- * 管理端列表 / 详情。
+ * 管理端 / 导师端共用：申请列表 / 详情 / 只读表单 / 弹窗。
  * 视觉沿用学生端表格：1px 细线、2px 圆角、13px 字号、#fafafa 表头、无阴影。
  */
 
-.admin-page {
+.staff-page {
   display: flex;
   flex-direction: column;
   width: 100%;
 }
 
-.admin-page__header {
+.staff-page__header {
   margin: 0 0 18px;
 }
 
-.admin-page__title {
+.staff-page__title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
   color: var(--color-text);
 }
 
-.admin-page__intro {
+.staff-page__intro {
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.6;
@@ -31,12 +31,12 @@
 /* 列表容器：筛选顶栏 + 表格 + 分页共用同一个外框                                */
 /* -------------------------------------------------------------------------- */
 
-.admin-table-container {
+.staff-table-container {
   background: #ffffff;
   border: 1px solid var(--color-divider);
 }
 
-.admin-toolbar {
+.staff-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -45,135 +45,140 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
-.admin-toolbar__field {
+.staff-toolbar__field {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.admin-toolbar__label {
+.staff-toolbar__label {
   font-size: 13px;
   color: var(--color-text);
   white-space: nowrap;
 }
 
-.admin-toolbar__status-wrap {
+.staff-toolbar__status-wrap {
   display: inline-block;
   width: 300px;
   max-width: 100%;
 }
 
-.admin-toolbar__select {
+.staff-toolbar__select {
   width: 100%;
 }
 
-.admin-toolbar__search-wrap {
+.staff-toolbar__search-wrap {
   display: inline-block;
   width: 280px;
   max-width: 100%;
 }
 
-.admin-toolbar__search {
+.staff-toolbar__search {
   width: 100%;
 }
 
-.admin-toolbar__spacer {
+.staff-toolbar__spacer {
   flex: 1 1 auto;
 }
 
-.admin-table-wrap {
+.staff-table-wrap {
   overflow-x: auto;
 }
 
-.admin-table {
+.staff-table {
   width: 100%;
   min-width: 1180px;
   border-collapse: collapse;
   font-size: 13px;
 }
 
-.admin-table th,
-.admin-table td {
+/* 导师端列表只有 6 列（无勾选、无 Second Choice），不需要管理端 8 列的宽度 */
+.staff-table--supervisor {
+  min-width: 960px;
+}
+
+.staff-table th,
+.staff-table td {
   padding: 10px 12px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--color-divider);
 }
 
-.admin-table th {
+.staff-table th {
   font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
   background: #fafafa;
 }
 
-.admin-table tbody tr:hover {
+.staff-table tbody tr:hover {
   background: #fafafa;
 }
 
-.admin-table tbody tr:last-child td {
+.staff-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.admin-table__select {
+.staff-table__select {
   width: 48px;
 }
 
-.admin-table__link {
+.staff-table__link {
   font-weight: 600;
   color: var(--brand-blue);
   word-break: break-all;
 }
 
-.admin-table__link:hover {
+.staff-table__link:hover {
   text-decoration: underline;
 }
 
-.admin-table__applicant {
+.staff-table__applicant {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.admin-table__applicant strong {
+.staff-table__applicant strong {
   font-weight: 600;
   color: var(--color-text);
 }
 
-.admin-table__applicant span {
+.staff-table__applicant span {
   font-size: 12px;
   color: var(--color-text-secondary);
   word-break: break-all;
 }
 
-.admin-table__time {
+.staff-table__time {
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
-.admin-table .ant-tag {
+.staff-table .ant-tag {
   margin-inline-end: 0;
 }
 
-.admin-table__actions {
+.staff-table__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.admin-table td.admin-table__empty {
+.staff-table td.staff-table__empty {
   padding: 40px 16px;
   color: var(--color-text-secondary);
   text-align: center;
 }
 
-.admin-table__empty p {
+.staff-table__empty p {
   margin: 0 0 4px;
 }
 
-.admin-table__state {
+.staff-table__state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -182,20 +187,20 @@
   min-height: 240px;
 }
 
-.admin-table__state-text {
+.staff-table__state-text {
   margin: 0;
   font-size: 13px;
   color: var(--color-text-secondary);
 }
 
-.admin-table__footer {
+.staff-table__footer {
   display: flex;
   justify-content: flex-end;
   padding: 12px 16px;
   border-top: 1px solid var(--color-divider);
 }
 
-.admin-table__footer .ant-pagination {
+.staff-table__footer .ant-pagination {
   flex-wrap: wrap;
   row-gap: 8px;
 }
@@ -204,14 +209,14 @@
 /* 详情                                                                        */
 /* -------------------------------------------------------------------------- */
 
-.admin-detail {
+.staff-detail {
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: 1180px;
 }
 
-.admin-detail__back {
+.staff-detail__back {
   align-self: flex-start;
   padding: 0;
   margin-bottom: 14px;
@@ -222,11 +227,11 @@
   border: 0;
 }
 
-.admin-detail__back:hover {
+.staff-detail__back:hover {
   text-decoration: underline;
 }
 
-.admin-detail__header {
+.staff-detail__header {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -234,21 +239,21 @@
   border-bottom: 1px solid var(--color-divider);
 }
 
-.admin-detail__title-row {
+.staff-detail__title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
 
-.admin-detail__number {
+.staff-detail__number {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
-.admin-detail__meta {
+.staff-detail__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
@@ -256,7 +261,7 @@
   color: var(--color-text-secondary);
 }
 
-.admin-detail__summary {
+.staff-detail__summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px 24px;
@@ -265,33 +270,33 @@
   border: 1px solid var(--color-divider);
 }
 
-.admin-detail__summary-item {
+.staff-detail__summary-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.admin-detail__summary-label {
+.staff-detail__summary-label {
   font-size: 12px;
   color: var(--color-text-secondary);
 }
 
-.admin-detail__summary-value {
+.staff-detail__summary-value {
   font-size: 13px;
   color: var(--color-text);
   word-break: break-word;
 }
 
-.admin-detail__alert {
+.staff-detail__alert {
   margin-top: 16px;
 }
 
-.admin-detail .section-nav-wrap {
+.staff-detail .section-nav-wrap {
   margin-top: 20px;
 }
 
-.admin-detail__actions {
+.staff-detail__actions {
   position: sticky;
   bottom: 0;
   z-index: 20;
@@ -306,23 +311,23 @@
   border: 1px solid var(--color-divider);
 }
 
-.admin-detail__hint {
+.staff-detail__hint {
   font-size: 13px;
   color: var(--color-text-secondary);
 }
 
-.admin-detail__action-buttons {
+.staff-detail__action-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.admin-detail__readonly {
+.staff-detail__readonly {
   font-size: 13px;
   color: #8c8c8c;
 }
 
-.admin-detail__result-actions {
+.staff-detail__result-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -333,52 +338,52 @@
 /* Status History                                                              */
 /* -------------------------------------------------------------------------- */
 
-.admin-history {
+.staff-history {
   margin-top: 32px;
 }
 
-.admin-history__wrap {
+.staff-history__wrap {
   overflow-x: auto;
   border: 1px solid var(--color-divider);
 }
 
-.admin-history__table {
+.staff-history__table {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.admin-history__table th,
-.admin-history__table td {
+.staff-history__table th,
+.staff-history__table td {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--color-divider);
 }
 
-.admin-history__table th {
+.staff-history__table th {
   font-weight: 600;
   white-space: nowrap;
   background: #fafafa;
 }
 
-.admin-history__table tbody tr:last-child td {
+.staff-history__table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.admin-history__remark {
+.staff-history__remark {
   max-width: 320px;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.admin-history__time {
+.staff-history__time {
   color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
-.admin-history__empty {
+.staff-history__empty {
   padding: 18px 10px;
   color: var(--color-text-secondary);
   text-align: center;
@@ -388,68 +393,68 @@
 /* 弹窗                                                                        */
 /* -------------------------------------------------------------------------- */
 
-.admin-modal__target {
+.staff-modal__target {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--color-text-secondary);
 }
 
-.admin-modal__label {
+.staff-modal__label {
   display: block;
   margin-bottom: 6px;
   font-size: 13px;
   color: var(--color-text);
 }
 
-.admin-modal__error {
+.staff-modal__error {
   margin: 6px 0 0;
   font-size: 12px;
   color: #cf1322;
 }
 
-.admin-modal__summary {
+.staff-modal__summary {
   margin: 0 0 14px;
   font-size: 13px;
   color: var(--color-text);
 }
 
-.admin-modal__failures {
+.staff-modal__failures {
   max-height: 320px;
   overflow-y: auto;
   border: 1px solid var(--color-divider);
 }
 
-.admin-modal__table {
+.staff-modal__table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
 }
 
-.admin-modal__table th,
-.admin-modal__table td {
+.staff-modal__table th,
+.staff-modal__table td {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid var(--color-divider);
 }
 
-.admin-modal__table th {
+.staff-modal__table th {
   font-weight: 600;
   background: #fafafa;
 }
 
-.admin-modal__table tbody tr:last-child td {
+.staff-modal__table tbody tr:last-child td {
   border-bottom: 0;
 }
 
-.admin-modal__actions {
+.staff-modal__actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 18px;
 }
 
 /* 详情页只读表单：白底卡片，模拟申请表页的阅读面 */
-.admin-body {
+.staff-body {
   margin-top: 16px;
   padding: 20px 24px 4px;
   background: #ffffff;
@@ -461,58 +466,58 @@
 /* -------------------------------------------------------------------------- */
 
 @media (max-width: 1024px) {
-  .admin-toolbar__field {
+  .staff-toolbar__field {
     flex: 1 1 100%;
   }
 
-  .admin-toolbar__status-wrap,
-  .admin-toolbar__search-wrap {
+  .staff-toolbar__status-wrap,
+  .staff-toolbar__search-wrap {
     width: 100%;
   }
 
-  .admin-toolbar__search-wrap {
+  .staff-toolbar__search-wrap {
     flex: 1 1 100%;
   }
 }
 
 @media (max-width: 900px) {
-  .admin-detail__summary {
+  .staff-detail__summary {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 640px) {
-  .admin-toolbar {
+  .staff-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .admin-toolbar__field {
+  .staff-toolbar__field {
     flex-wrap: wrap;
   }
 
-  .admin-toolbar__spacer {
+  .staff-toolbar__spacer {
     display: none;
   }
 
-  .admin-table__footer {
+  .staff-table__footer {
     justify-content: center;
   }
 
-  .admin-table__footer .ant-pagination-options {
+  .staff-table__footer .ant-pagination-options {
     display: none;
   }
 
-  .admin-detail__actions {
+  .staff-detail__actions {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .admin-detail__action-buttons {
+  .staff-detail__action-buttons {
     justify-content: flex-end;
   }
 
-  .admin-body {
+  .staff-body {
     padding: 16px 14px 0;
   }
 }

@@ -6,14 +6,15 @@ import { STAFF_STATUS_META } from '@/constants/application';
 import { makeRow } from '@/features/application/form-values';
 import { useSectionScrollSpy } from '@/features/application/composables/useSectionScrollSpy';
 import SectionNav from '@/features/application/components/SectionNav.vue';
+import ApplicationReadOnlyBody from '@/features/staff/components/ApplicationReadOnlyBody.vue';
+import StatusHistoryTable from '@/features/staff/components/StatusHistoryTable.vue';
+import { formatDateTime } from '@/features/staff/messages';
 import type { FormValues } from '@/types/application';
-import AdminApplicationBody from '../components/AdminApplicationBody.vue';
 import ReturnReasonModal from '../components/ReturnReasonModal.vue';
-import StatusHistoryTable from '../components/StatusHistoryTable.vue';
 import { useAdminApplicationDetail } from '../composables/useAdminApplicationDetail';
-import { ADMIN_MESSAGES, STATUS_HINTS, formatDateTime } from '../messages';
+import { ADMIN_MESSAGES, ADMIN_STATUS_HINTS } from '../messages';
 import '@/features/application/styles/application-form.css';
-import '../styles/admin.css';
+import '@/features/staff/styles/staff.css';
 
 const route = useRoute();
 const router = useRouter();
@@ -78,7 +79,7 @@ const hasReviewActions = computed(
 );
 
 const statusHint = computed(() =>
-  detail.value ? STATUS_HINTS[detail.value.status] : '',
+  detail.value ? ADMIN_STATUS_HINTS[detail.value.status] : '',
 );
 
 const statusColor = computed(() =>
@@ -138,8 +139,8 @@ watch(loading, async (value) => {
 </script>
 
 <template>
-  <div class="admin-detail">
-    <button type="button" class="admin-detail__back" @click="goBack">
+  <div class="staff-detail">
+    <button type="button" class="staff-detail__back" @click="goBack">
       {{ ADMIN_MESSAGES.detail.back }}
     </button>
 
@@ -168,7 +169,7 @@ watch(loading, async (value) => {
       :sub-title="error"
     >
       <template #extra>
-        <div class="admin-detail__result-actions">
+        <div class="staff-detail__result-actions">
           <a-button type="primary" @click="load">{{ ADMIN_MESSAGES.detail.tryAgain }}</a-button>
           <a-button @click="goToList">{{ ADMIN_MESSAGES.detail.backToList }}</a-button>
         </div>
@@ -176,12 +177,12 @@ watch(loading, async (value) => {
     </a-result>
 
     <template v-else-if="detail && schema">
-      <header class="admin-detail__header">
-        <div class="admin-detail__title-row">
-          <h1 class="admin-detail__number">{{ detail.applicationNumber }}</h1>
+      <header class="staff-detail__header">
+        <div class="staff-detail__title-row">
+          <h1 class="staff-detail__number">{{ detail.applicationNumber }}</h1>
           <a-tag :color="statusColor">{{ detail.displayStatus }}</a-tag>
         </div>
-        <div class="admin-detail__meta">
+        <div class="staff-detail__meta">
           <span>{{ detail.nameEn || '—' }}</span>
           <span>{{ detail.email }}</span>
           <span v-if="detail.submittedAt">
@@ -190,32 +191,32 @@ watch(loading, async (value) => {
         </div>
       </header>
 
-      <div class="admin-detail__summary">
-        <div class="admin-detail__summary-item">
-          <span class="admin-detail__summary-label">{{ ADMIN_MESSAGES.detail.firstChoice }}</span>
-          <span class="admin-detail__summary-value">
+      <div class="staff-detail__summary">
+        <div class="staff-detail__summary-item">
+          <span class="staff-detail__summary-label">{{ ADMIN_MESSAGES.detail.firstChoice }}</span>
+          <span class="staff-detail__summary-value">
             {{ choiceLabel(detail.firstProgramCode, detail.firstSupervisorName) }}
           </span>
         </div>
-        <div class="admin-detail__summary-item">
-          <span class="admin-detail__summary-label">{{ ADMIN_MESSAGES.detail.secondChoice }}</span>
-          <span class="admin-detail__summary-value">
+        <div class="staff-detail__summary-item">
+          <span class="staff-detail__summary-label">{{ ADMIN_MESSAGES.detail.secondChoice }}</span>
+          <span class="staff-detail__summary-value">
             {{ choiceLabel(detail.secondProgramCode, detail.secondSupervisorName) }}
           </span>
         </div>
-        <div class="admin-detail__summary-item">
-          <span class="admin-detail__summary-label">{{ ADMIN_MESSAGES.detail.reviewer }}</span>
-          <span class="admin-detail__summary-value">{{ detail.firstSupervisorName || '—' }}</span>
+        <div class="staff-detail__summary-item">
+          <span class="staff-detail__summary-label">{{ ADMIN_MESSAGES.detail.reviewer }}</span>
+          <span class="staff-detail__summary-value">{{ detail.firstSupervisorName || '—' }}</span>
         </div>
-        <div class="admin-detail__summary-item">
-          <span class="admin-detail__summary-label">{{ ADMIN_MESSAGES.detail.lastUpdated }}</span>
-          <span class="admin-detail__summary-value">{{ formatDateTime(detail.updatedAt) }}</span>
+        <div class="staff-detail__summary-item">
+          <span class="staff-detail__summary-label">{{ ADMIN_MESSAGES.detail.lastUpdated }}</span>
+          <span class="staff-detail__summary-value">{{ formatDateTime(detail.updatedAt) }}</span>
         </div>
       </div>
 
       <a-alert
         v-if="detail.status === 'Returned' && detail.returnReason"
-        class="admin-detail__alert"
+        class="staff-detail__alert"
         type="warning"
         show-icon
         :message="ADMIN_MESSAGES.detail.returnReason"
@@ -226,7 +227,7 @@ watch(loading, async (value) => {
         <SectionNav :sections="schema.sections" :active-code="active" @select="scrollTo" />
       </div>
 
-      <AdminApplicationBody
+      <ApplicationReadOnlyBody
         :schema="schema"
         :values="values"
         :value-labels="valueLabels"
@@ -234,9 +235,9 @@ watch(loading, async (value) => {
 
       <StatusHistoryTable :timeline="detail.timeline" />
 
-      <div class="admin-detail__actions">
-        <span class="admin-detail__hint">{{ statusHint }}</span>
-        <div class="admin-detail__action-buttons">
+      <div class="staff-detail__actions">
+        <span class="staff-detail__hint">{{ statusHint }}</span>
+        <div class="staff-detail__action-buttons">
           <template v-if="hasReviewActions">
             <a-button
               v-if="canApprove"
@@ -265,7 +266,7 @@ watch(loading, async (value) => {
               {{ ADMIN_MESSAGES.action.sendOffer }}
             </a-button>
           </template>
-          <span v-else class="admin-detail__readonly">{{ ADMIN_MESSAGES.detail.readOnly }}</span>
+          <span v-else class="staff-detail__readonly">{{ ADMIN_MESSAGES.detail.readOnly }}</span>
         </div>
       </div>
     </template>

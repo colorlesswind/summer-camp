@@ -72,14 +72,23 @@ ui/
 │   │   ├── form-values.ts         # hydrate / payload 纯函数（学生端与管理端共用）
 │   │   ├── messages.ts            # 页面文案与字段级错误翻译
 │   │   └── styles/                # application-shell.css（学生端共用外壳）、application-form.css
+│   ├── features/staff/            # 管理端 / 导师端共用
+│   │   ├── components/            # 只读申请正文、Status History、筛选栏
+│   │   ├── messages.ts            # 动作文案 / 日期格式化 / History 文案
+│   │   ├── types.ts               # 筛选栏 props 类型
+│   │   └── styles/staff.css       # 列表 / 详情 / 只读表单 / 弹窗样式
 │   ├── features/admin/
 │   │   ├── views/                 # AdminApplicationsView（列表）、AdminApplicationDetailView（详情）
-│   │   ├── components/            # 筛选栏、表格、Return 弹窗、批量结果、只读表单、Status History
+│   │   ├── components/            # 表格、Return 弹窗、批量结果
 │   │   ├── composables/           # useAdminApplications、useAdminApplicationDetail
-│   │   ├── messages.ts            # 管理端英文文案与状态说明
-│   │   └── styles/admin.css       # 管理端列表 / 详情样式
+│   │   └── messages.ts            # 管理端英文文案与状态说明
+│   ├── features/supervisor/
+│   │   ├── views/                 # SupervisorApplicationsView、SupervisorApplicationDetailView
+│   │   ├── components/            # SupervisorApplicationTable、ReviewRemarkModal
+│   │   ├── composables/           # useSupervisorApplications、useSupervisorApplicationDetail
+│   │   └── messages.ts            # 导师端英文文案与状态说明
 │   ├── layouts/                   # AuthLayout / MainLayout（支持 fullBleed）
-│   ├── pages/                     # 403、404、导师端占位页
+│   ├── pages/                     # 403、404
 │   ├── router/                    # 路由表与守卫
 │   ├── stores/auth.ts             # 会话状态与登录动作
 │   ├── types/                     # 与后端对齐的 DTO（user / application / api）
@@ -87,12 +96,6 @@ ui/
 ├── env.d.ts
 ├── vite.config.ts
 └── tsconfig*.json
-```
-
-下一阶段会在 `features/` 下新增：
-
-```text
-features/supervisor/     # 导师端：名下申请列表、Recommend / Reject
 ```
 
 ## 路由
@@ -107,8 +110,8 @@ features/supervisor/     # 导师端：名下申请列表、Recommend / Reject
 | `/applications/:id`             | student    | 单页申请表（配置驱动，按状态只读） |
 | `/admin/applications`           | admin      | 申请列表：status 筛选、关键词搜索、分页、批量 Send Offer |
 | `/admin/applications/:id`       | admin      | 申请详情：字段只读 + Approve / Return / Send Offer |
-| `/supervisor/applications`      | supervisor | 占位：分配给当前导师的申请        |
-| `/supervisor/applications/:id`  | supervisor | 占位：申请详情                    |
+| `/supervisor/applications`      | supervisor | 分配给当前导师的申请：6 状态筛选、搜索、分页、Recommend / Reject |
+| `/supervisor/applications/:id`  | supervisor | 申请详情：字段只读 + Recommend / Reject |
 | `/403` `/404`                   | 公开       | 错误页                            |
 
 守卫逻辑：首次导航先 `GET /user/me` 恢复会话；未登录访问受保护路由会跳 `/login?redirect=...`；角色不匹配跳 `/403`；已登录访问 `/login` 直接回角色首页。
@@ -160,7 +163,21 @@ features/supervisor/     # 导师端：名下申请列表、Recommend / Reject
 - **批量 Send Offer**：只允许勾选 `SupervisorRecommended`，仅作用于当前页；调用 `POST /form/offers/batch`，成功数 / 失败数 / 失败明细用弹窗展示，失败原因按 `code` 翻译为英文。
 - **详情**：返回链接 + 编号 / 状态 Tag + 申请人 / 提交时间 + 摘要（两个志愿、评审导师、最近更新时间）+ 退回原因提示 + 吸顶分节导航 + 只读表单 + Status History + **粘底操作条**（长表单读到底仍可操作）。
 - **只读渲染**：`FormField` 新增 `presentation="text"`（默认 `control`，学生端行为不变）：长文本完整换行、选项显示 label、日期格式化、URL 可点击、声明显示 Agreed / Not agreed，避免把 8000 字个人陈述压进灰色 textarea。
+- **共享层**：只读正文、Status History、筛选栏与列表 / 详情样式在 `features/staff/`，导师端复用同一套视觉。
 - 管理端状态文案 / 颜色在 `constants/application.ts` 的 `STAFF_STATUS_META`，已与服务端 `form/form.display.ts` 的 `STAFF_DISPLAY` 对齐。
+
+## 导师端（Supervisor）
+
+导师端对应需求 §2.3，路由 `/supervisor/applications`（列表）与 `/supervisor/applications/:id`（详情），代码在 `features/supervisor/`，只读正文与样式复用 `features/staff/`。
+
+- **可见范围由服务端决定**：`GET /form/applications` 自动按 `reviewer_supervisor_id = 当前导师` 收窄，且只返回 `PendingSupervisorReview` 起的 6 个状态；未分配 / 未进入导师审核的申请在详情一律 404（不泄露存在性），前端不做二次过滤。
+- **列表**：与 `/admin/applications` 同一套布局（表格容器顶栏 + 手写表格 + 分页），但**无勾选列、无批量**；筛选项只列 6 个可见状态，默认 `All`；筛选 / 页码写 URL，关键词 300ms 防抖。
+- **列**：Application No.（链接进详情）、Applicant（姓名 + 邮箱）、Program（第一志愿 Thrust）、Status、Last Updated、Action。不放 Second Choice——导师只关心第一志愿（即自己）。
+- **动作矩阵**：`PendingSupervisorReview` → 行内与详情均提供 `Recommend`（二次确认）/ `Reject`（备注可选，max 1000，写入 Status History 的 Remark）；均为单条操作；其余状态只读显示 `—` / `Read-only`。
+- **详情**：编号 + 状态 Tag + 申请人 / 提交时间 + 摘要（两个志愿的 Program、Submitted、Last Updated）+ 吸顶分节导航 + 只读表单 + Status History + **粘底操作条**。
+- **异常**：409 `invalid_transition` 提示状态已变化并自动刷新；导师账号未绑定导师档案（403 `supervisor_not_registered`）在列表与详情都走专用提示页，而不是通用报错。
+- 导师端文案 / 状态说明在 `features/supervisor/messages.ts`；可见状态常量 `SUPERVISOR_VISIBLE_STATUSES` 在 `constants/application.ts`，与服务端 `form/form.display.ts` 一一对应。
+- 界面截图：`ui/.screenshots/supervisor-list.png`（待审状态 + Recommend / Reject）、`supervisor-list-empty.png`（筛选空态）、`supervisor-detail.png`（详情 + 粘底操作条）。
 
 ## 登录说明
 

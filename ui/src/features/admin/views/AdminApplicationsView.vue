@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Modal, message } from 'ant-design-vue';
+import { STAFF_STATUS_OPTIONS } from '@/constants/application';
 import type { ApplicationSummary, BatchOfferResult } from '@/types/application';
+import ApplicationFilterBar from '@/features/staff/components/ApplicationFilterBar.vue';
+import type { FilterBarTexts, StatusFilterOption } from '@/features/staff/types';
 import { useAdminApplications } from '../composables/useAdminApplications';
 import { ADMIN_MESSAGES } from '../messages';
-import ApplicationFilterBar from '../components/ApplicationFilterBar.vue';
 import ApplicationTable from '../components/ApplicationTable.vue';
 import BatchOfferResultModal from '../components/BatchOfferResultModal.vue';
 import ReturnReasonModal from '../components/ReturnReasonModal.vue';
-import '../styles/admin.css';
+import '@/features/staff/styles/staff.css';
 
 const {
   items,
@@ -39,6 +41,19 @@ const batchResult = ref<BatchOfferResult | null>(null);
 const batchResultOpen = ref(false);
 
 const hasFilters = computed(() => status.value !== null || keyword.value.trim() !== '');
+
+/** 第一项显式「All」，清空下拉同样回到 All */
+const statusOptions: StatusFilterOption[] = [
+  { value: '', label: ADMIN_MESSAGES.filter.all },
+  ...STAFF_STATUS_OPTIONS,
+];
+
+const filterTexts: FilterBarTexts = {
+  statusLabel: ADMIN_MESSAGES.filter.statusLabel,
+  all: ADMIN_MESSAGES.filter.all,
+  searchPlaceholder: ADMIN_MESSAGES.filter.searchPlaceholder,
+  reset: ADMIN_MESSAGES.filter.reset,
+};
 
 const totalLabel = (count: number): string => `Total ${count}`;
 
@@ -106,23 +121,35 @@ function handlePageChange(nextPage: number, nextSize: number): void {
 </script>
 
 <template>
-  <div class="admin-page">
-    <header class="admin-page__header">
-      <h1 class="admin-page__title">{{ ADMIN_MESSAGES.title }}</h1>
-      <p class="admin-page__intro">{{ ADMIN_MESSAGES.intro }}</p>
+  <div class="staff-page">
+    <header class="staff-page__header">
+      <h1 class="staff-page__title">{{ ADMIN_MESSAGES.title }}</h1>
+      <p class="staff-page__intro">{{ ADMIN_MESSAGES.intro }}</p>
     </header>
 
-    <div class="admin-table-container">
+    <div class="staff-table-container">
       <ApplicationFilterBar
         :status="status"
+        :status-options="statusOptions"
         :keyword="keyword"
-        :selected-count="selectedCount"
+        :texts="filterTexts"
         :busy="actionBusy"
         @update:keyword="keyword = $event"
         @change-status="setStatus"
         @reset="reset"
-        @batch="confirmBatch"
-      />
+      >
+        <template #actions>
+          <a-button
+            type="primary"
+            :disabled="selectedCount === 0 || actionBusy"
+            :loading="actionBusy && selectedCount > 0"
+            :title="selectedCount === 0 ? ADMIN_MESSAGES.filter.batchHint : undefined"
+            @click="confirmBatch"
+          >
+            {{ ADMIN_MESSAGES.filter.batchButton(selectedCount) }}
+          </a-button>
+        </template>
+      </ApplicationFilterBar>
 
       <a-result
         v-if="error"
@@ -148,7 +175,7 @@ function handlePageChange(nextPage: number, nextSize: number): void {
           @clear-filters="reset"
         />
 
-        <footer class="admin-table__footer">
+        <footer class="staff-table__footer">
           <a-pagination
             :current="page"
             :page-size="pageSize"

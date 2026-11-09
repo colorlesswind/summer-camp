@@ -64,6 +64,27 @@ export const STAFF_STATUS_OPTIONS = APPLICATION_STATUSES.map((status) => ({
   label: STAFF_STATUS_META[status].label,
 }));
 
+/**
+ * 导师端可见范围：`PendingSupervisorReview` 及之后。
+ *
+ * 与服务端 form/form.display.ts 的 SUPERVISOR_VISIBLE_STATUSES 一一对应：
+ * 初筛前的 3 个状态对导师完全不可见（详情按 404 处理），所以筛选下拉也不提供。
+ */
+export const SUPERVISOR_VISIBLE_STATUSES: readonly ApplicationStatus[] = [
+  'PendingSupervisorReview',
+  'SupervisorRecommended',
+  'SupervisorRejected',
+  'OfferSent',
+  'OfferAccepted',
+  'OfferDeclined',
+];
+
+export const SUPERVISOR_STATUS_OPTIONS = SUPERVISOR_VISIBLE_STATUSES.map((status) => ({
+  value: status,
+  label: STAFF_STATUS_META[status].label,
+}));
+
+
 export const staffStatusLabel = (status: string): string =>
   (STAFF_STATUS_META as Record<string, StaffStatusMeta | undefined>)[status]?.label ?? status;
 

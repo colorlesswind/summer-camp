@@ -7,6 +7,10 @@ import FormFieldGroup from '@/features/application/components/FormFieldGroup.vue
 import RepeatableSection from '@/features/application/components/RepeatableSection.vue';
 import StatementSection from '@/features/application/components/StatementSection.vue';
 
+/**
+ * 管理端 / 导师端共用的只读申请正文：schema 驱动，全部按 `presentation="text"` 渲染。
+ * 两端只共用一个只读壳，不涉及任何动作按钮。
+ */
 const props = defineProps<{
   schema: FormSchema;
   values: FormValues;
@@ -36,7 +40,7 @@ function rowsFor(section: FormSectionConfig): RepeatableRow[] {
 </script>
 
 <template>
-  <form class="application-form admin-body" novalidate @submit.prevent>
+  <form class="application-form staff-body" novalidate @submit.prevent>
     <template v-for="section in schema.sections" :key="section.code">
       <StatementSection
         v-if="section.code === 'STATEMENT'"

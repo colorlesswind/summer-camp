@@ -21,13 +21,16 @@ const MainLayout = () => import('@/layouts/MainLayout.vue');
 const LoginView = () => import('@/features/auth/views/LoginView.vue');
 const ForbiddenView = () => import('@/pages/ForbiddenView.vue');
 const NotFoundView = () => import('@/pages/NotFoundView.vue');
-const PlaceholderView = () => import('@/pages/PlaceholderView.vue');
 const StudentEntryView = () => import('@/features/application/views/StudentEntryView.vue');
 const ApplicationStatusView = () => import('@/features/application/views/ApplicationStatusView.vue');
 const ApplicationFormView = () => import('@/features/application/views/ApplicationFormView.vue');
 const AdminApplicationsView = () => import('@/features/admin/views/AdminApplicationsView.vue');
 const AdminApplicationDetailView = () =>
   import('@/features/admin/views/AdminApplicationDetailView.vue');
+const SupervisorApplicationsView = () =>
+  import('@/features/supervisor/views/SupervisorApplicationsView.vue');
+const SupervisorApplicationDetailView = () =>
+  import('@/features/supervisor/views/SupervisorApplicationDetailView.vue');
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -106,13 +109,13 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'supervisor/applications',
         name: 'supervisor-applications',
-        component: PlaceholderView,
+        component: SupervisorApplicationsView,
         meta: { roles: ['supervisor'], title: 'Assigned Applications' },
       },
       {
         path: 'supervisor/applications/:id',
         name: 'supervisor-application-detail',
-        component: PlaceholderView,
+        component: SupervisorApplicationDetailView,
         meta: { roles: ['supervisor'], title: 'Application Detail' },
       },
     ],

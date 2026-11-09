@@ -1,7 +1,9 @@
-import dayjs from 'dayjs';
 import type { ApplicationStatus } from '@/types/application';
 
-/** 管理端固定文案（英文界面），与 features/application/messages.ts 分开维护 */
+/**
+ * 管理端专属文案（英文界面）。
+ * 与导师端共用的 Status History 文案、日期格式化、动作文案在 features/staff/messages.ts。
+ */
 export const ADMIN_MESSAGES = {
   title: 'Applications',
   intro: 'Review applications and send offers to recommended candidates.',
@@ -87,18 +89,7 @@ export const ADMIN_MESSAGES = {
     reviewer: 'Reviewer',
     lastUpdated: 'Last Updated',
     returnReason: 'Return reason',
-    historyTitle: 'Status History',
-    historyEmpty: 'No status changes yet.',
     readOnly: 'Read-only',
-  },
-
-  history: {
-    action: 'Action',
-    from: 'From',
-    to: 'To',
-    actor: 'Actor',
-    remark: 'Remark',
-    time: 'Time',
   },
 
   loading: 'Loading applications…',
@@ -108,7 +99,7 @@ export const ADMIN_MESSAGES = {
 } as const;
 
 /** 详情页粘底操作条左侧的状态说明 */
-export const STATUS_HINTS: Record<ApplicationStatus, string> = {
+export const ADMIN_STATUS_HINTS: Record<ApplicationStatus, string> = {
   Draft: 'This application is still a draft and cannot be reviewed yet.',
   PendingForPreliminaryScreening: 'Awaiting preliminary screening.',
   Returned: 'Waiting for the applicant to update and resubmit.',
@@ -119,22 +110,6 @@ export const STATUS_HINTS: Record<ApplicationStatus, string> = {
   OfferAccepted: 'Offer accepted by the applicant.',
   OfferDeclined: 'Offer declined by the applicant.',
 };
-
-/** 状态流转日志里的动作文案 */
-export const ACTION_LABELS: Record<string, string> = {
-  save: 'Save',
-  submit: 'Submit',
-  resubmit: 'Resubmit',
-  return: 'Return',
-  approve: 'Approve',
-  recommend: 'Recommend',
-  reject: 'Reject',
-  send_offer: 'Send Offer',
-  accept_offer: 'Accept Offer',
-  decline_offer: 'Decline Offer',
-};
-
-export const actionLabel = (action: string): string => ACTION_LABELS[action] ?? action;
 
 /**
  * 批量 Send Offer 的失败原因是 200 响应体里的 `code + message`，
@@ -151,15 +126,3 @@ const BATCH_FAILURE_MESSAGES: Record<string, string> = {
 
 export const batchFailureMessage = (code: string): string =>
   BATCH_FAILURE_MESSAGES[code] ?? 'Unable to send the offer for this application.';
-
-export function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '—';
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : '—';
-}
-
-export function formatDateTimeSeconds(value: string | null | undefined): string {
-  if (!value) return '—';
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : '—';
-}

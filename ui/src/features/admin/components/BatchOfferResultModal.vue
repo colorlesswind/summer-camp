@@ -25,12 +25,12 @@ function close(): void {
     @cancel="close"
   >
     <template v-if="result">
-      <p class="admin-modal__summary">
+      <p class="staff-modal__summary">
         {{ ADMIN_MESSAGES.batch.summary(result.successCount, result.failureCount, result.total) }}
       </p>
 
-      <div v-if="result.failures.length > 0" class="admin-modal__failures">
-        <table class="admin-modal__table">
+      <div v-if="result.failures.length > 0" class="staff-modal__failures">
+        <table class="staff-modal__table">
           <thead>
             <tr>
               <th>{{ ADMIN_MESSAGES.batch.failureApplication }}</th>
@@ -47,7 +47,7 @@ function close(): void {
       </div>
     </template>
 
-    <div class="admin-modal__actions">
+    <div class="staff-modal__actions">
       <a-button type="primary" @click="close">{{ ADMIN_MESSAGES.batch.close }}</a-button>
     </div>
   </a-modal>
