@@ -2,7 +2,7 @@
 
 港科大（广州）夏令营报名系统的前端 SPA：Vue 3 + TypeScript + Vite + Ant Design Vue 4 + Vue Router 4 + Pinia + axios。
 
-当前阶段已完成登录页、学生端申请表（配置驱动、Save / Submit / Resubmit、只读状态）与 Application Status 页；管理端、导师端的列表与审核页面仍以占位页预留，下一阶段填充。
+当前阶段已完成登录页、学生端申请表（配置驱动、Save / Submit / Resubmit、只读状态）与 Application Status 表格页（状态 / 退回原因 / 动作 / 时间，Accept / Decline 带二次确认）；管理端、导师端的列表与审核页面仍以占位页预留，下一阶段填充。
 
 ## 快速开始
 
@@ -52,7 +52,7 @@ ui/
 │   │   ├── http.ts                # axios、CSRF、401 单飞刷新、会话失效回调
 │   │   ├── problem.ts             # problem+json → ApiError（英文文案）
 │   │   ├── auth.ts                # /user/otp、/user/logon、/user/me、/user/logout
-│   │   └── application.ts         # /form/schema、详情、Save、Submit、Resubmit、导师候选
+│   │   └── application.ts         # /form/schema、详情、Save、Submit、Resubmit、Accept / Decline、导师候选
 │   ├── assets/styles/             # reset / CSS 变量 / 全局排版
 │   ├── components/
 │   │   ├── BrandHeader.vue        # 校徽 + 功能枢纽 FUNCTION HUB
@@ -66,11 +66,11 @@ ui/
 │   │   └── messages.ts            # 英文文案集中管理
 │   ├── features/application/
 │   │   ├── views/                 # StudentEntryView、ApplicationStatusView、ApplicationFormView
-│   │   ├── components/            # FormField、FormFieldGroup、RepeatableSection、StatementSection、SectionNav
+│   │   ├── components/            # FormField、FormFieldGroup、RepeatableSection、StatementSection、SectionNav、StudentSidebar
 │   │   ├── composables/           # useApplicationForm、useSectionScrollSpy
 │   │   ├── field-groups.ts        # group_code 合并成一行/一列
 │   │   ├── messages.ts            # 页面文案与字段级错误翻译
-│   │   └── styles/application-form.css
+│   │   └── styles/                # application-shell.css（学生端共用外壳）、application-form.css
 │   ├── layouts/                   # AuthLayout / MainLayout（支持 fullBleed）
 │   ├── pages/                     # 403、404、管理端/导师端占位页
 │   ├── router/                    # 路由表与守卫
@@ -96,7 +96,7 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 | `/login`                        | 游客       | 登录页（学生 / 员工模式切换）     |
 | `/`                             | 登录       | 按角色重定向到各自首页            |
 | `/start`                        | student    | 登录后分流：可填表 → `/applications/new`，其余 → `/applications` |
-| `/applications`                 | student    | Application Status（查看当前状态与入口） |
+| `/applications`                 | student    | Application Status 表格（状态 / 退回原因 / 动作 / 时间） |
 | `/applications/new`             | student    | 新建申请表；已有申请时自动跳到详情 |
 | `/applications/:id`             | student    | 单页申请表（配置驱动，按状态只读） |
 | `/admin/applications`           | admin      | 占位：申请列表                    |
@@ -123,12 +123,25 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 - **可重复小节**：Publications / Work Experience 支持增删行，最多 20 行；提交时空行会被服务端丢弃。
 - **Save**：不校验必填；首次 Save 用 `POST /form/applications` 创建 Draft 并生成 Application No.，之后用 `PUT /form/applications/:id`。
 - **Submit / Resubmit**：先做客户端必填与跨字段校验，再 Save，最后调用 `submit` / `resubmit`；服务端校验失败时把字段级错误映射到对应控件并展示英文文案。
-- **只读状态**：服务端 `editable=false` 或状态不是 `Draft` / `Returned` 时，字段全部禁用，只保留 Previous；OfferSent 的 Accept / Decline 留到申请列表阶段。
+- **只读状态**：服务端 `editable=false` 或状态不是 `Draft` / `Returned` 时，字段全部禁用，只保留 Previous；`OfferSent` 的 Accept / Decline 在 Application Status 页完成。
 - **提交时间段**：`meta.canSaveDraft` / `meta.submissionWindow` 控制 Save、Submit 的显示与服务端 409 提示。
 - **未保存保护**：表单 dirty 时离开页面会二次确认；首次 Save 成功后 URL 自动从 `/applications/new` 替换为 `/applications/:id`，刷新可恢复。
 - **导师候选**：`GET /form/supervisors?programCode=...` 按 Program 过滤，下拉支持输入搜索；换 Program 会清空对应 Supervisor，第二志愿会排除第一志愿。
 
 页面文案与字段级错误翻译集中在 [`features/application/messages.ts`](./src/features/application/messages.ts)，日期使用 `dayjs`。
+
+## Application Status（学生端列表）
+
+`/applications` 按 `附件/application-status.png` 的表格形态实现（`features/application/views/ApplicationStatusView.vue`），状态集合仍以笔试题「简要流程 / 动作 × 状态」为准。
+
+- **布局**：学生端共用外壳（`StudentSidebar` + `styles/application-shell.css`）：左栏 SUMMER CAMP / Application Status / Application Form，右栏说明文案 + 表格。
+- **列**：Application Number、Name in English（统一转大写）、Application Status、Return Reason、Due Date、Action、Time（`YYYY-MM-DD HH:mm:ss`，取 `status_changed_at`）。
+- **行**：按状态流转日志逐行展示「走过的状态」（最新在前、当前状态加粗），因此一份申请会有多行；连续重复的内部状态只保留一次，折叠成同一文案的连续状态（如两个 Under Review）也合并；历史行不带 Action，只有当前行可操作。
+- **空状态**：还没有申请时给一行 `Draft` 占位，点 `Application Form` 进入新建。
+- **Action**：`Draft` → `Application Form`，`Returned` → `Update`，`OfferSent` → `Respond`（弹窗内 Accept Offer / Decline Offer，再各弹一次确认，成功后本行状态即时更新）；其余状态显示 `-`。
+- **退回原因**：`Pending for Update` 行展示该次退回的 `Return Reason:` + 原因全文（历史行用它自己那次 Return 的备注）。
+- **Due Date**：按本次确认保留该列占位，不承载业务逻辑，值固定 `-`。
+- **reserved 状态**：附件里的 Action Required: Confirm Attendance / Attendance Confirmed / Attendance Declined / Offer Lapsed / Reject Letter Sent / Withdrawn 本期不实现，仅在 `constants/application.ts` 的 `RESERVED_STATUS_META` 登记文案（灰色 tone），不参与状态匹配，页面不渲染这些行。
 
 ## 登录说明
 
@@ -192,7 +205,7 @@ server {
 
 - Ant Design Vue 采用**按需注册**（见 `src/main.ts`）；新增页面用到新组件时在 `main.ts` 追加 `app.use(...)`。
 - 所有 UI 文案为英文；登录文案在 `features/auth/messages.ts`，申请表文案在 `features/application/messages.ts`。
-- 学生端状态文案与 Tag 颜色在 `constants/application.ts`（`STUDENT_STATUS_META`）；管理端/导师端文案下一阶段再加。
+- 学生端状态文案、Tag 颜色与表格色调在 `constants/application.ts`（`STUDENT_STATUS_META`，label 与服务端 `displayStatus` 一致）；未实现的 6 个附件状态登记在 `RESERVED_STATUS_META`（灰色，reserved）；管理端/导师端文案下一阶段再加。
 - 申请表只读渲染当前用 disabled 控件，方便 admin/supervisor 直接复用同一套表单；下一阶段如需要更适合审阅的长文本换行展示，可在 `FormField` 增加 `presentation: 'readonly'` 分支。
 - 占位页（`pages/PlaceholderView.vue`）仍用于管理端/导师端，完成对应页面后删除。
 - 未引入 i18n 库，因为当前只要求英文界面。

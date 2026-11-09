@@ -1,0 +1,128 @@
+/*
+ * 学生端两页（Application Status / Application Form）共用的外壳布局：
+ * 左侧 SUMMER CAMP 导航 + 右侧主区。
+ * 由 application-form.css 与 ApplicationStatusView 共同引入。
+ */
+
+.application-page {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - var(--header-height));
+  background: #ffffff;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sidebar                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.application-sidebar {
+  padding: 0;
+  background: #ffffff;
+  border-right: 1px solid var(--color-divider);
+}
+
+.application-sidebar__sticky {
+  position: sticky;
+  top: 0;
+  padding: 28px 18px;
+}
+
+.application-sidebar__brand {
+  margin-bottom: 22px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+}
+
+.application-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.application-sidebar__item {
+  display: block;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  border-radius: 2px;
+}
+
+a.application-sidebar__item:hover {
+  color: var(--brand-blue);
+  background: #f5f5f5;
+  text-decoration: none;
+}
+
+.application-sidebar__item.is-active {
+  color: var(--brand-blue);
+  background: #e6f4ff;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main                                                                        */
+/* -------------------------------------------------------------------------- */
+
+.application-main {
+  min-width: 0;
+  padding: 0 32px 48px;
+}
+
+.application-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 360px;
+}
+
+.application-state__text {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive                                                                  */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .application-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-sidebar {
+    display: block;
+    padding: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-divider);
+  }
+
+  .application-sidebar__sticky {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+  }
+
+  .application-sidebar__brand {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .application-sidebar__nav {
+    flex-direction: row;
+  }
+
+  .application-main {
+    padding: 0 20px 40px;
+  }
+}
+
+@media (max-width: 640px) {
+  .application-main {
+    padding: 0 14px 32px;
+  }
+}

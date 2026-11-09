@@ -59,6 +59,22 @@ export const applicationApi = {
     return unwrap(data);
   },
 
+  /** 学生接受 Offer：OfferSent -> OfferAccepted */
+  async acceptOffer(id: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/accept-offer`,
+    );
+    return unwrap(data);
+  },
+
+  /** 学生拒绝 Offer：OfferSent -> OfferDeclined */
+  async declineOffer(id: string): Promise<ApplicationDetail> {
+    const { data } = await http.post<ApiEnvelope<ApplicationDetail>>(
+      `/form/applications/${id}/decline-offer`,
+    );
+    return unwrap(data);
+  },
+
   /** 学生列表（当前只有一份；状态页复用） */
   async listMine(page = 1, pageSize = 20): Promise<ApplicationListResult> {
     const { data } = await http.get<ApiEnvelope<ApplicationListResult>>('/form/applications', {

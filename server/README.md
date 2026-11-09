@@ -488,15 +488,18 @@ POST /user/password/change
 | --- | --- | --- |
 | `Draft` | Draft | Draft |
 | `PendingForPreliminaryScreening` | **Under Review** | Pending For Preliminary Screening |
-| `Returned` | **Need Update** | Returned |
+| `Returned` | **Pending for Update** | Returned |
 | `PendingSupervisorReview` | **Under Review** | Pending Supervisor Review |
-| `SupervisorRecommended` | **Under Review** | Supervisor Recommended |
+| `SupervisorRecommended` | **Recommended** | Supervisor Recommended |
 | `SupervisorRejected` | Rejected | Supervisor Rejected |
 | `OfferSent` | **Pending for Offer Acceptance** | Offer Sent |
 | `OfferAccepted` | Offer Accepted | Offer Accepted |
 | `OfferDeclined` | Offer Declined | Offer Declined |
 
-判断逻辑请用 `status`（9 个枚举原文），显示用 `displayStatus`。学生端多个内部状态都折叠成 Under Review，是题目要求的行为。
+判断逻辑请用 `status`（9 个枚举原文），显示用 `displayStatus`。学生端把初筛与导师审核两个内部状态折叠成同一个 Under Review；`Returned` 与 `SupervisorRecommended` 的学生端文案对齐附件 `application-status.png`（Pending for Update / Recommended）。
+
+> 附件里另有 6 个本期未实现的状态：`Action Required: Confirm Attendance`、`Attendance Confirmed`、`Attendance Declined`、`Offer Lapsed`、`Reject Letter Sent`、`Withdrawn`。
+> 它们与本题状态机对不上，服务端不产生、不返回，也不参与流转，文档中标记为 **reserved**；前端只在 `ui/src/constants/application.ts` 登记文案并置灰。
 
 ### 10.5 关键契约
 

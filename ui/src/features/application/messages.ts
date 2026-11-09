@@ -4,6 +4,8 @@ import dayjs from 'dayjs';
 export const APPLICATION_MESSAGES = {
   pageTitle: 'APPLICATION FORM',
   sidebarTitle: 'SUMMER CAMP',
+  sidebarStatus: 'Application Status',
+  sidebarForm: 'Application Form',
   sidebarMenu: 'Application Form',
   applicationNumber: 'Application No.',
   status: 'Status',
@@ -37,6 +39,43 @@ export const APPLICATION_MESSAGES = {
   applicationNoPending: '—',
 } as const;
 
+/**
+ * Application Status 页文案（界面参考 附件/application-status.png）。
+ * 注意：Due Date 列只做占位，需求没有定义业务逻辑，值固定为 `-`。
+ */
+export const STATUS_PAGE_MESSAGES = {
+  intro:
+    'Thank you for your interest in the HKUST(GZ) Function Hub Summer Camp for PhD Admission (Fall 2026). Please click to submit the Application Form.',
+  title: 'Application Status',
+  loading: 'Loading application…',
+  loadFailedTitle: 'Unable to load your application',
+  tryAgain: 'Try again',
+  columns: {
+    applicationNumber: 'Application Number',
+    name: 'Name in English',
+    status: 'Application Status',
+    returnReason: 'Return Reason',
+    dueDate: 'Due Date',
+    action: 'Action',
+    time: 'Time',
+  },
+  actionApplicationForm: 'Application Form',
+  actionUpdate: 'Update',
+  actionRespond: 'Respond',
+  respondTitle: 'Respond to Offer',
+  respondHint: 'Please choose how you would like to respond to your offer.',
+  acceptOffer: 'Accept Offer',
+  declineOffer: 'Decline Offer',
+  acceptConfirmTitle: 'Accept this offer?',
+  acceptConfirmContent: 'Your application will be marked as Offer Accepted. This cannot be undone.',
+  declineConfirmTitle: 'Decline this offer?',
+  declineConfirmContent: 'Your application will be marked as Offer Declined. This cannot be undone.',
+  cancel: 'Cancel',
+  respondAccepted: 'Offer accepted.',
+  respondDeclined: 'Offer declined.',
+  respondFailed: 'Unable to submit your response. Please try again.',
+} as const;
+
 /** 服务端 validation issue code → 英文提示 */
 const ISSUE_MESSAGES: Record<string, string> = {
   required: 'This field is required.',
@@ -66,6 +105,13 @@ export function formatDateTime(value: string | null | undefined): string {
   if (!value) return '—';
   const parsed = dayjs(value);
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : '—';
+}
+
+/** Application Status 页的 Time 列用精确到秒的格式（与附件一致） */
+export function formatDateTimeSeconds(value: string | null | undefined): string {
+  if (!value) return '—';
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : '—';
 }
 
 export function formatWindow(opensAt: string | null, closesAt: string | null): string {

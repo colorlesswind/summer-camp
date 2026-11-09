@@ -73,7 +73,8 @@ export const routes: RouteRecordRaw[] = [
         path: 'applications',
         name: 'student-applications',
         component: ApplicationStatusView,
-        meta: { roles: ['student'], title: 'Application Status' },
+        // 页面自己带左侧 SUMMER CAMP 导航，去掉 MainLayout 的内边距
+        meta: { roles: ['student'], title: 'Application Status', fullBleed: true },
       },
       {
         path: 'applications/new',

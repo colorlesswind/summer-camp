@@ -4,19 +4,26 @@ import type { UserRole } from '../user/user.types';
 /**
  * 状态 → 展示文案。
  *
- * 依据笔试题「状态与展示」：
- *   - 学生端看到的是「业务语义」文案（Under Review / Need Update / ...），
- *     多个内部状态会折叠成同一个 Under Review；
+ * 依据笔试题「状态与展示」与附件 application-status.png：
+ *   - 学生端看到的是「业务语义」文案（Under Review / Pending for Update / ...），
+ *     初筛与导师审核两个内部状态折叠成同一个 Under Review；
  *   - 管理端与导师端一致，直接展示内部状态的可读化形式。
+ *
+ * 与附件的对齐（本次确认）：
+ *   - `Returned` 的学生端文案用附件里的 **Pending for Update**（笔试题原文写的是 Need Update）；
+ *   - `SupervisorRecommended` 的学生端文案用附件里的 **Recommended**，不再折叠成 Under Review。
+ *
+ * 附件里还有 6 个本期未实现的状态（Attendance / Offer Lapsed / Reject Letter Sent / Withdrawn），
+ * 它们不在 ApplicationStatus 里，也不参与流转，只在 README 中标记为 reserved。
  *
  * 内部 status 永远原样返回，前端要判断逻辑时用 status，要显示时用 displayStatus。
  */
 const STUDENT_DISPLAY: Record<ApplicationStatus, string> = {
   Draft: 'Draft',
   PendingForPreliminaryScreening: 'Under Review',
-  Returned: 'Need Update',
+  Returned: 'Pending for Update',
   PendingSupervisorReview: 'Under Review',
-  SupervisorRecommended: 'Under Review',
+  SupervisorRecommended: 'Recommended',
   SupervisorRejected: 'Rejected',
   OfferSent: 'Pending for Offer Acceptance',
   OfferAccepted: 'Offer Accepted',

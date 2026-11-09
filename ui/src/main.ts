@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Result,
   Select,
   Spin,
@@ -35,6 +36,7 @@ app.use(DatePicker);
 app.use(Form);
 app.use(Input);
 app.use(InputNumber);
+app.use(Modal);
 app.use(Result);
 app.use(Select);
 app.use(Spin);

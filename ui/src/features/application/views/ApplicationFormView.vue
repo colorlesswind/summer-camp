@@ -8,6 +8,7 @@ import FormFieldGroup from '../components/FormFieldGroup.vue';
 import RepeatableSection from '../components/RepeatableSection.vue';
 import SectionNav from '../components/SectionNav.vue';
 import StatementSection from '../components/StatementSection.vue';
+import StudentSidebar from '../components/StudentSidebar.vue';
 import { useApplicationForm, type RepeatableRow } from '../composables/useApplicationForm';
 import { useSectionScrollSpy } from '../composables/useSectionScrollSpy';
 import { APPLICATION_MESSAGES, formatDateTime } from '../messages';
@@ -313,14 +314,7 @@ onBeforeRouteLeave(() => {
 
 <template>
   <div class="application-page">
-    <aside class="application-sidebar">
-      <div class="application-sidebar__sticky">
-        <div class="application-sidebar__brand">{{ APPLICATION_MESSAGES.sidebarTitle }}</div>
-        <nav class="application-sidebar__nav" aria-label="Summer Camp">
-          <span class="application-sidebar__item is-active">{{ APPLICATION_MESSAGES.sidebarMenu }}</span>
-        </nav>
-      </div>
-    </aside>
+    <StudentSidebar active="form" />
 
     <div class="application-main">
       <div v-if="form.loading.value" class="application-state">
