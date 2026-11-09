@@ -2,10 +2,19 @@ import { AppError, internal } from '../common/errors';
 import { logger } from '../common/logger';
 import { normalizeEmail } from '../common/crypto';
 import { env, type BootstrapAccount } from '../config';
+import { supervisorRepository } from '../form/supervisor.repository';
 import { auditLog } from '../infra/audit.log';
 import { passwordService } from '../user/auth/password.service';
 import { passwordRepository, usersRepository } from '../user/user.repository';
 import type { UserRole } from '../user/user.types';
+
+/**
+ * 导师账号必须绑定到 supervisors 档案（supervisors.user_id），
+ * 否则导师端「分配给我的申请」永远是空列表。这条提示要足够可操作。
+ */
+const SUPERVISOR_UNBOUND_HINT =
+  '未找到 email 匹配的导师档案：导师端将看不到任何申请。请先执行 npm run migrate 导入 supervisor.xlsx，' +
+  '并把 BOOTSTRAP_SUPERVISOR_*_EMAIL 改成名单里的邮箱';
 
 /**
  * 预置账号（1 admin + 2 supervisor）的幂等初始化。
@@ -97,12 +106,21 @@ const seedOne = async (
 
   if (!user) throw internal(`预置账号读取失败：${email}`);
 
+  // 导师账号要额外绑定到导师档案（幂等，只绑定尚未绑定的记录）
+  const bindOutcome =
+    account.role === 'supervisor' ? await supervisorRepository.bindUserByEmail(user.id, email) : null;
+
   if (created) {
+    const createdNotes = ['已创建账号，邮箱标记为已验证'];
+    if (bindOutcome === 'bound' || bindOutcome === 'already_bound') createdNotes.push('已绑定导师档案');
+    if (bindOutcome === 'not_found') createdNotes.push(SUPERVISOR_UNBOUND_HINT);
+    if (bindOutcome === 'conflict') createdNotes.push('同名导师档案已绑定其他账号，未做修改');
+
     return report({
       email,
       role: account.role,
       action: 'created',
-      notes: ['已创建账号，邮箱标记为已验证'],
+      notes: createdNotes,
     });
   }
 
@@ -138,6 +156,15 @@ const seedOne = async (
     await passwordRepository.upsert(user.id, await passwordService.hash(account.password));
     notes.push('已补写密码凭证');
     repaired = true;
+  }
+
+  if (bindOutcome === 'bound') {
+    notes.push('已绑定导师档案');
+    repaired = true;
+  } else if (bindOutcome === 'not_found') {
+    notes.push(SUPERVISOR_UNBOUND_HINT);
+  } else if (bindOutcome === 'conflict') {
+    notes.push('同名导师档案已绑定其他账号，未做修改');
   }
 
   if (!repaired) {

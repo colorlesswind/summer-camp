@@ -2,7 +2,7 @@
 
 ```
 summer-camp
-├── server/   # Express + TypeScript 服务端（认证模块见 server/README.md）
+├── server/   # Express + TypeScript 服务端（认证 /user + 申请表 /form，接口见 server/README.md）
 └── ui/       # 前端 SPA
 ```
 
@@ -16,4 +16,4 @@ npm run migrate
 npm run dev
 ```
 
-详见 [server/README.md](./server/README.md)。
+详见 [server/README.md](./server/README.md)（第 10 节是申请表模块 `/form` 的接口说明）。

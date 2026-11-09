@@ -9,15 +9,33 @@ interface ProblemDetail {
   title: string;
   status: number;
   code: string;
+  message: string;
   detail: string;
   errors?: unknown;
 }
 
-const buildProblem = (status: number, code: string, detail: string, errors?: unknown): ProblemDetail => ({
+/**
+ * 业务细节里的 code 优先于通用 code。
+ * 例：assertCan 抛的是 conflict(..., { code: 'invalid_transition' })，
+ * 顶层 code 应该是 invalid_transition 而不是笼统的 conflict，前端才好分支处理。
+ */
+const reasonCode = (details: unknown): string | null => {
+  if (typeof details !== 'object' || details === null) return null;
+  const code = (details as { code?: unknown }).code;
+  return typeof code === 'string' && code.length > 0 ? code : null;
+};
+
+const buildProblem = (
+  status: number,
+  code: string,
+  detail: string,
+  errors?: unknown,
+): ProblemDetail => ({
   type: `about:blank#${code}`,
   title: code,
   status,
   code,
+  message: detail,
   detail,
   ...(errors === undefined ? {} : { errors }),
 });
@@ -58,7 +76,14 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     }
     res
       .status(error.status)
-      .json(buildProblem(error.status, error.code, error.expose ? error.message : '服务器内部错误', error.details));
+      .json(
+        buildProblem(
+          error.status,
+          reasonCode(error.details) ?? error.code,
+          error.expose ? error.message : '服务器内部错误',
+          error.details,
+        ),
+      );
     return;
   }
 

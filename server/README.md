@@ -1,6 +1,13 @@
-# Summer Camp · 认证服务
+# Summer Camp · 服务端
 
-Express + TypeScript 的登录/注册服务，支持三种身份来源，最终都收敛为「本系统 user_id + JWT（HttpOnly Cookie）」：
+Express + TypeScript 服务端，按业务域拆成两个模块：
+
+| 模块 | 前缀 | 说明 |
+| --- | --- | --- |
+| 认证 | `/user` | 登录 / 注册 / 验证码 / 刷新 / 登出 / 第三方登录 |
+| 申请表 | `/form` | 表单配置、申请单保存与提交、学生/管理员/导师三端状态流转、批量发送 Offer |
+
+认证模块支持三种身份来源，最终都收敛为「本系统 user_id + JWT（HttpOnly Cookie）」：
 
 | 身份来源 | 状态 | 说明 |
 | --- | --- | --- |
@@ -96,12 +103,24 @@ server/src
 ├── db/
 │   ├── pool.ts               # 连接池（UTC、utf8mb4、事务封装）
 │   ├── migrate.ts            # 极简迁移器
-│   └── migrations/001_init.sql
-├── common/                   # errors / logger / crypto / validate / http
+│   └── migrations/           # 001 认证 / 002 RBAC / 003 申请表 / 004 参考数据 / 005 导师
+├── common/                   # errors / logger / crypto / validate / http / response
 ├── middleware/               # authenticate / csrf / trusted-origin / error-handler
 ├── infra/
 │   ├── rate-limit.store.ts   # 限流抽象（现在是 MySQL 实现，可换 Redis）
 │   └── audit.log.ts          # auth_audit 审计
+├── form/                     # ★ 申请表模块（接口见第 10 节）
+│   ├── form.routes.ts        # 18 个路由，挂到 /form
+│   ├── form.controller.ts    # 薄控制器：参数 -> service -> { code, message, data }
+│   ├── form.service.ts       # Save / Submit / Approve / Return / Recommend / Reject / Offer
+│   ├── form.repository.ts    # 申请单 + 明细 + 志愿 + 子表 + 审计日志的 SQL
+│   ├── form.config.repository.ts / form.config.service.ts  # 表单配置与提交窗口（含 30s 缓存）
+│   ├── form.validation.ts    # 字段级校验（类型/长度/选项/必填/联动）
+│   ├── form.display.ts       # status -> displayStatus（学生端与后台端文案不同）
+│   ├── form.schema.ts        # zod 入参
+│   ├── form.types.ts
+│   ├── supervisor.repository.ts # 导师候选检索 + 账号绑定
+│   └── application.state.ts  # 状态机 + assertCan（动作/角色/状态）
 └── user/                     # ★ 所有登录逻辑都在这里
     ├── user.routes.ts / user.controller.ts / user.service.ts
     ├── user.repository.ts / identity.repository.ts / user.schema.ts / user.types.ts
@@ -202,9 +221,10 @@ sequenceDiagram
 
 ---
 
-## 5. 接口清单
+## 5. 接口清单（认证）
 
 所有接口前缀 `/user`，请求/响应均为 JSON。错误统一返回 `application/problem+json`。
+申请表相关接口在 `/form` 下，见 [第 10 节](#10-申请表模块form)。
 
 | 方法 | 路径 | 说明 | 认证 |
 | --- | --- | --- | --- |
@@ -331,6 +351,19 @@ POST /user/password/change
 | `rate_limited` | 429 | 触发限流，响应头带 `Retry-After` |
 | `internal_error` | 500 | 服务端异常（细节只写日志） |
 
+申请表模块补充的错误码（同样走 problem+json，`code` 已提升到顶层）：
+
+| code | HTTP | 含义 |
+| --- | --- | --- |
+| `invalid_transition` | 409 | 当前状态不允许该动作（`details.current` / `details.allowedFrom`） |
+| `submission_window_closed` | 409 | 不在提交时间段内（Submit），或时段结束后仍尝试保存草稿 |
+| `application_exists` | 409 | 同一账号重复创建申请（`details.applicationId` 指向已有申请） |
+| `not_resource_owner` | 403 | 学生操作他人的申请 |
+| `role_forbidden` | 403 | 当前角色无权执行该动作 |
+| `supervisor_not_registered` | 403 | 导师账号尚未绑定导师档案（`supervisors.user_id`） |
+| `supervisor_program_mismatch` | 400 | 所选导师不属于所选 Program |
+| `duplicate_program` / `duplicate_supervisor` | 400 | 两个志愿选了同一个 Program / 同一位导师 |
+
 ---
 
 ## 7. 安全设计要点
@@ -375,3 +408,308 @@ POST /user/password/change
 - [ ] `refresh_tokens` / `jwt_denylist` / `rate_limit_events` 的定时清理任务
 - [ ] 触发式人机验证（连续失败后要求）
 - [ ] OpenAPI 文档（当前接口契约见本文档）
+
+---
+
+## 10. 申请表模块（`/form`）
+
+字段口径来自 `附件/application-form.xlsx`（Sheet1 的 A/B/C/D 四列），状态与流转来自笔试题的「简要流程 / 状态与展示」两节。
+
+### 10.1 数据模型
+
+| 表 | 作用 |
+| --- | --- |
+| `applications` | 申请单主体：`application_number` / `status` / `reviewer_supervisor_id` / `submitted_at` / `return_reason` |
+| `application_details` | 1:1 明细：个人信息、研究方向、个人陈述 |
+| `application_program_choices` | 志愿（最多两条，`choice_rank` 1/2） |
+| `application_publications` / `application_experiences` | 可重复小节（论文 / 经历） |
+| `application_consents` | 声明勾选（记录同意的条款版本） |
+| `application_status_logs` | 状态流转审计（动作 / 从哪到哪 / 谁 / 备注） |
+| `programs` / `supervisors` / `document_types` / `exams` / `exam_subjects` / `statement_definitions` | 参考数据 |
+| `form_sections` / `form_fields` / `form_field_options` | 表单配置（A/B/C/D 四列落成数据） |
+| `submission_windows` | 提交时间段（数据库配置，需求 2.1） |
+
+可重复小节与明细的读写**由配置驱动**：`form_fields.storage_table` + `storage_column` 决定值落在哪一列，`form_sections.payload_key` 决定可重复小节在 `values` 里的数组键。
+
+### 10.2 状态机 ↔ 端点
+
+| 动作 | 端点 | 角色 | 从 | 到 |
+| --- | --- | --- | --- | --- |
+| Create | `POST /form/applications` | student | — | `Draft` |
+| Save | `PUT /form/applications/:id` | student | `Draft` / `Returned` | 不变 |
+| Submit | `POST /form/applications/:id/submit` | student | `Draft` | `PendingForPreliminaryScreening` |
+| Resubmit | `POST /form/applications/:id/resubmit` | student | `Returned` | `PendingForPreliminaryScreening` |
+| Approve | `POST /form/applications/:id/approve` | admin | `PendingForPreliminaryScreening` | `PendingSupervisorReview` |
+| Return | `POST /form/applications/:id/return` | admin | `PendingForPreliminaryScreening` | `Returned` |
+| Recommend | `POST /form/applications/:id/recommend` | supervisor | `PendingSupervisorReview` | `SupervisorRecommended` |
+| Reject | `POST /form/applications/:id/reject` | supervisor | `PendingSupervisorReview` | `SupervisorRejected` |
+| Send Offer | `POST /form/applications/:id/send-offer`、`POST /form/offers/batch` | admin | `SupervisorRecommended` | `OfferSent` |
+| Accept Offer | `POST /form/applications/:id/accept-offer` | student | `OfferSent` | `OfferAccepted` |
+| Decline Offer | `POST /form/applications/:id/decline-offer` | student | `OfferSent` | `OfferDeclined` |
+
+两层校验：路由层 `requireRole` 只挡角色；「当前状态能不能做这件事」由 `form/application.state.ts` 的 `assertCan(action, role, status)` 在服务层校验，非法流转返回 **409 `invalid_transition`**。
+
+### 10.3 接口清单
+
+所有接口前缀 `/form`，都需要登录（Cookie）；写操作额外要求 `X-CSRF-Token`。
+
+| 方法 | 路径 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/form/schema` | 已登录 | 表单配置 + `meta.submissionWindow`（前端据此禁用 Submit） |
+| GET | `/form/supervisors?programCode=AMAT&keyword=bl&limit=20` | 已登录 | 志愿导师候选，按 Program 过滤 + 模糊搜索 |
+| GET | `/form/applications` | 全部 | 列表，按角色自动收窄；支持 `status`（可重复或逗号分隔）、`keyword`、`page`、`pageSize` |
+| GET | `/form/applications/mine` | student | 「我那一份」，没有则 `data: null` |
+| POST | `/form/applications` | student | 首次 Save：建单 + 生成 Application No. → **201** |
+| GET | `/form/applications/:id` | 全部 | 详情：`values` + 服务端算好的 `actions` + `timeline` |
+| PUT | `/form/applications/:id` | student | Save（不校验必填） |
+| GET | `/form/applications/:id/history` | 全部 | 状态流转时间线 |
+| POST | `/form/applications/:id/submit` | student | Submit |
+| POST | `/form/applications/:id/resubmit` | student | Resubmit |
+| POST | `/form/applications/:id/approve` | admin | 初筛通过 |
+| POST | `/form/applications/:id/return` | admin | 退回（`reason` 必填） |
+| POST | `/form/applications/:id/recommend` | supervisor | 推荐（`reason` 可选） |
+| POST | `/form/applications/:id/reject` | supervisor | 拒绝（`reason` 可选） |
+| POST | `/form/applications/:id/send-offer` | admin | 单条发送 Offer |
+| POST | `/form/applications/:id/accept-offer` | student | 接受 Offer |
+| POST | `/form/applications/:id/decline-offer` | student | 拒绝 Offer |
+| POST | `/form/offers/batch` | admin | 批量发送 Offer（并行 + 单条超时） |
+
+> `/form` 的请求体上限放宽到 **256kb**（个人陈述等长文本），其余接口仍是 32kb。
+
+成功响应统一为 `{ code, message, data }`，`code = 0` 表示成功：
+
+```json
+{ "code": 0, "message": "ok", "data": { } }
+```
+
+### 10.4 `displayStatus`（学生端文案与后台不同）
+
+| 内部 `status` | 学生端 `displayStatus` | 管理端 / 导师端 |
+| --- | --- | --- |
+| `Draft` | Draft | Draft |
+| `PendingForPreliminaryScreening` | **Under Review** | Pending For Preliminary Screening |
+| `Returned` | **Need Update** | Returned |
+| `PendingSupervisorReview` | **Under Review** | Pending Supervisor Review |
+| `SupervisorRecommended` | **Under Review** | Supervisor Recommended |
+| `SupervisorRejected` | Rejected | Supervisor Rejected |
+| `OfferSent` | **Pending for Offer Acceptance** | Offer Sent |
+| `OfferAccepted` | Offer Accepted | Offer Accepted |
+| `OfferDeclined` | Offer Declined | Offer Declined |
+
+判断逻辑请用 `status`（9 个枚举原文），显示用 `displayStatus`。学生端多个内部状态都折叠成 Under Review，是题目要求的行为。
+
+### 10.5 关键契约
+
+**`GET /form/schema`（节选）**
+
+```json
+{ "code": 0, "message": "ok", "data": {
+  "meta": { "serverTime": "2026-11-09T00:24:03.000Z",
+            "submissionWindow": { "isOpen": true, "opensAt": "...", "closesAt": "..." } },
+  "sections": [
+    { "code": "PERSONAL_PARTICULARS", "titleEn": "Personal Particulars", "payloadKey": null,
+      "isRepeatable": false, "sortOrder": 10,
+      "fields": [
+        { "code": "gender", "labelEn": "Gender", "widget": "single_choice",
+          "isRequired": true, "optionsSource": "static",
+          "options": [{ "value": "MALE", "labelEn": "Male" }, { "value": "FEMALE", "labelEn": "Female" }] },
+        { "code": "supervisorFirstId", "widget": "single_choice", "valueType": "number",
+          "optionsSource": "supervisors_by_thrust", "dependsOnField": "programFirstId" }
+      ] }
+  ],
+  "enums": { "programs": [{ "value": "AMAT", "labelEn": "PhD in Advanced Materials(AMAT)" }] }
+} }
+```
+
+**`GET /form/applications`（学生视角）**
+
+```json
+{ "code": 0, "message": "ok", "data": {
+  "items": [{
+    "id": "01J...", "applicationNumber": "26000000001",
+    "nameEn": "ZHANG, San", "fullNameZh": "张三", "email": "a@b.com",
+    "status": "PendingSupervisorReview", "displayStatus": "Under Review",
+    "returnReason": null, "updatedAt": "2026-11-08T12:00:00.000Z",
+    "firstProgramCode": "AMAT", "firstSupervisorName": "Blake WANG",
+    "secondProgramCode": null, "secondSupervisorName": null
+  }],
+  "total": 1, "page": 1, "pageSize": 20
+} }
+```
+
+**`GET /form/applications/:id`（详情）**
+
+```json
+{ "code": 0, "message": "ok", "data": {
+  "id": "01J...", "applicationNumber": "26000000001",
+  "status": "Draft", "displayStatus": "Draft",
+  "submittedAt": null, "updatedAt": "...", "returnReason": null,
+  "editable": true,
+  "actions": ["save", "submit"],
+  "values": {
+    "lastNameEn": "ZHANG", "firstNameEn": "San", "gender": "MALE",
+    "dateOfBirth": "2002-05-01", "idDocumentType": "RESIDENT_ID",
+    "needsStudentVisa": true, "phoneCountryCode": "+86", "phoneNumber": "13800138000",
+    "email": "a@b.com",
+    "programFirstId": "AMAT", "supervisorFirstId": 366,
+    "programSecondId": null, "supervisorSecondId": null,
+    "personalStatement": "...",
+    "publications": [{ "pubTitle": "A study ...", "pubStatus": "PUBLISHED" }],
+    "experiences": [],
+    "consentDeclaration": true, "consentMedia": false
+  },
+  "timeline": [{ "action": "save", "fromStatus": null, "toStatus": "Draft",
+                 "actorRole": "student", "remark": null, "at": "..." }]
+} }
+```
+
+- `values` 的 key 就是 `form_fields.code`，前端按 schema 渲染即可，不需要手工映射字段名。
+- `actions` 是服务端按「角色 + 状态 + 归属 + 提交窗口」算好的可执行动作，前端只做按钮显隐，但**服务端仍会再校验一次**。
+- `editable` 为 `true` 时前端才放开表单编辑。
+
+**`PUT /form/applications/:id`（Save）**
+
+```json
+{ "values": { "lastNameEn": "ZHANG", "gender": "MALE", "phoneNumber": "13800138000" } }
+```
+
+- 不校验必填（草稿可以残缺），但会校验类型、长度、选项、联动与跨字段规则；
+- **提供的 key 覆盖，未提供的 key 保持原值**——整表单提交和分节自动保存都适用；
+- 传入未知 key 直接 400 `unknown_field`，避免前端旧版本写脏字段；
+- 非 `Draft` / `Returned` → 409 `invalid_transition`；时段结束后 `Draft` 也不能再保存（409 `submission_window_closed`）。
+
+**`POST /form/applications/:id/submit` 校验失败**
+
+校验对象是**库里已保存的内容**（不是请求体）。必填来自 `form_fields.is_required`：
+
+```json
+{ "type": "about:blank#validation_failed", "title": "validation_failed", "status": 400,
+  "code": "validation_failed", "message": "表单校验未通过", "detail": "表单校验未通过",
+  "errors": [
+    { "path": "values.personalStatement", "code": "required", "message": "Personal Statement 为必填项" },
+    { "path": "values.supervisorFirstId", "code": "supervisor_program_mismatch", "message": "第一志愿导师不属于所选 Program" }
+  ] }
+```
+
+**`POST /form/offers/batch`**
+
+```json
+// 请求
+{ "ids": ["01J...", "01J..."] }
+
+// 200
+{ "code": 0, "message": "ok", "data": {
+  "total": 10, "successCount": 8, "failureCount": 2,
+  "failures": [
+    { "id": "01J...", "applicationNumber": "26000000005",
+      "code": "invalid_transition", "message": "当前状态不允许该操作" }
+  ]
+} }
+```
+
+### 10.6 可见性与权限
+
+| 场景 | 返回 |
+| --- | --- |
+| 学生读取/操作他人申请 | 403 `not_resource_owner` |
+| 导师读取「未进入 `PendingSupervisorReview`」的申请 | 404（业务上不可见，不泄露存在性） |
+| 导师读取别人的申请 | 404 |
+| 非分配导师执行 Recommend/Reject | 404 |
+| 状态不符 | 409 `invalid_transition`（`details.current` / `details.allowedFrom`） |
+| 窗口外 Submit / 时段结束后存草稿 | 409 `submission_window_closed` |
+| 导师账号未绑定档案 | 403 `supervisor_not_registered` |
+
+- 学生端列表只返回自己那一份（`uk_applications_user` 保证唯一）。
+- 导师端列表强制 `reviewer_supervisor_id = 自己` 且 `status ∈ {PendingSupervisorReview, SupervisorRecommended, SupervisorRejected, OfferSent, OfferAccepted, OfferDeclined}`。
+- 管理员列表支持按 `status` 过滤与 `keyword`（编号 / 姓名 / 邮箱）搜索。
+
+### 10.7 提交时间段（需求 2.1 的「数据库配置」）
+
+`submission_windows` 表就是配置入口，不需要单独的时间配置页：
+
+```sql
+-- 改窗口时间
+UPDATE submission_windows SET opens_at = '2026-11-01 00:00:00', closes_at = '2026-12-31 15:59:59' WHERE id = '...';
+-- 追加一个窗口（多条即多窗口，落在任一窗口内即可提交）
+INSERT INTO submission_windows (id, label, opens_at, closes_at, is_active, created_at, updated_at)
+VALUES ('01JQ...', '第二批', '2027-01-01 00:00:00', '2027-01-31 15:59:59', TRUE, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3));
+```
+
+- `Submit` 只在窗口内允许；`Resubmit`、审核、Offer 相关动作不受窗口限制；
+- `Draft` 的 Save：窗口开始前允许、窗口内允许、窗口都结束后拒绝；
+- 一个窗口都没配时视为不限制（避免本地开发被卡死）。
+
+### 10.8 表单配置化：加一个字段要做什么
+
+字段的 `code` 就是 API 的 `values` 键，也是数据库列名（`storage_column`）的映射入口：
+
+1. 在 `form_fields` 插一行：`code`（camelCase，等于前端取值 key）、`section_code`、`label_en`、`widget`、`value_type`、`is_required`、`max_length`、`storage_table` + `storage_column`；
+2. 单选/复选框在 `form_field_options` 插选项（`options_source` 为 `programs` / `exams` / `supervisors_by_thrust` 时走参考表，不用插）；
+3. 若需要新列：`ALTER TABLE application_details ADD COLUMN ...`，把列名填进 `storage_column`。
+
+**不用改任何 TS 代码**，30 秒配置缓存过期后自动生效（或重启进程）。
+
+当前已实现的小节：Personal Particulars、Program Choice、Personal Statement、Publications、Work Experience、Statement。
+Education / Awards / Supporting Documents / English Proficiency 按题目要求「可先不实现」，小节已建但 `is_enabled = 0`；启用时需要补对应的子表写入逻辑（`form.service.ts` 里的 `persist`）。
+
+### 10.9 批量 Send Offer 的并行处理（需求 2.2）
+
+`POST /form/offers/batch` 对每条申请起一个独立事务的子流程：
+
+| 项 | 值 | 位置 |
+| --- | --- | --- |
+| 并发度 | 10 | `BATCH_CONCURRENCY` |
+| 单条超时 | 3000 ms | `BATCH_ITEM_TIMEOUT_MS` |
+| 超时结果 | 该条记为失败，`code: "timeout"`，不影响其他条 | `withTimeout` |
+
+返回 `successCount` / `failureCount` / `failures[]`，前端可据此提示「成功 8 条，失败 2 条及原因」。
+
+> 需求 2.1 的「报名名额」未实现：`supervisors.quota_capacity` / `quota_used` 两列已预留，如需启用，在 `Submit` 事务里对导师行做 `UPDATE supervisors SET quota_used = quota_used + 1 WHERE id = ? AND quota_used < quota_capacity`，影响行数为 0 即名额已满。
+
+### 10.10 导师账号绑定（否则导师端看不到任何申请）
+
+导师登录账号（`users.role = 'supervisor'`）与导师档案（`supervisors`）是两张表，靠 `supervisors.user_id` 关联：
+
+- `npm run migrate` 会导入 `附件/supervisor.xlsx` 的 75 位导师（`005_seed_supervisors.sql`）；
+- bootstrap 建号时按 **email 相等** 回填 `supervisors.user_id`，找不到匹配档案会打 WARN 并在结果里给出提示；
+- 所以 `BOOTSTRAP_SUPERVISOR_*_EMAIL` 要填名单里存在的邮箱（例如 `supervisor002@example.com`），否则导师端列表恒为空。
+
+手工绑定（幂等）：
+
+```sql
+UPDATE supervisors SET user_id = (SELECT id FROM users WHERE primary_email = 'supervisor002@example.com')
+ WHERE email = 'supervisor002@example.com' AND user_id IS NULL;
+```
+
+### 10.11 冒烟测试
+
+覆盖「建单 → 保存 → 提交 → 退回 → 重提 → 初筛 → 推荐 → 批量 Offer → 接受」全链路，以及必填校验、非法流转、CSRF、导师可见性 404 等 60+ 个断言：
+
+```bash
+npm run dev                 # 另开终端
+npx tsx scripts/smoke-form.ts
+```
+
+脚本会自建一次性账号（`smoke_*_<时间戳>@example.com`）并绑定空闲导师档案，不会动现有预置账号。
+
+### 10.12 Postman 集合
+
+[`postman/summer-camp-form.postman_collection.json`](./postman/summer-camp-form.postman_collection.json) 可直接 Import（37 个请求，18 个端点全覆盖）。
+
+| 文件夹 | 内容 |
+| --- | --- |
+| `00 · 前置 / 重置` | 健康检查、重置测试变量、`GET /form/schema` |
+| `01 · 学生：登录 → 建单 → 提交` | OTP 登录、导师候选、**完整 mock 建单**、详情、局部 Save、Submit、列表、时间线 |
+| `02 · 管理员：初筛 Approve` | 管理员登录、按状态过滤列表、Approve |
+| `03 · 导师：评审 Recommend` | 导师登录、导师列表/详情、Recommend |
+| `04 · 管理员：批量 Send Offer` | 批量 Offer + 状态确认 |
+| `05 · 学生：接受 Offer` | 重新登录、看 `displayStatus`、Accept Offer |
+| `90 · 负向与可选分支` | 非法流转 409、缺 CSRF 403、未知字段 400、退回/重提、Reject、单条 Send Offer、Decline、越权 404 |
+
+使用注意：
+
+- 按 `00 → 05` 顺序 Run 即可走完 happy path；`90` 里的请求有前置状态要求，按需单独点击。
+- Cookie 是同一域名共享的，所以每个文件夹开头都重新登录一次切角色。
+- 学生验证码需手工填：执行「发送登录验证码」后，把控制台里的 `[DEV MAIL] 登录验证码 xxxxxx` 填到集合变量 `studentOtp`（第二次登录填 `studentOtp2`）。同邮箱 60 秒内重发会 429。
+- `POST /form/applications` 的 body 是一份**完整 mock**（43 个字段，含 publications / experiences 两个数组行），可直接复制到别处使用；其中 `supervisorFirstId: 366`（AMAT）与 `supervisorSecondId: 363`（MICS）来自 `005_seed_supervisors.sql`，换库时自行替换。
+

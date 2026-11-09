@@ -49,6 +49,9 @@ export function createApp(): Express {
     }),
   );
 
+  // 申请表里有长文本（Personal Statement / Proposed Research Areas），
+  // 给 /form 单独放宽请求体上限；先挂的解析器会标记 req._body，全局解析器随后跳过。
+  app.use('/form', express.json({ limit: '256kb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(express.urlencoded({ extended: false, limit: '32kb' }));
   app.use(cookieParser());
