@@ -3,7 +3,7 @@
 ```
 summer-camp
 ├── server/   # Express + TypeScript 服务端（认证 /user + 申请表 /form，接口见 server/README.md）
-└── ui/       # Vue 3 + Vite 前端 SPA（登录页 / 角色路由 / 申请表页面）
+└── ui/       # Vue 3 + Vite 前端 SPA（登录 / 学生申请表 / Application Status；管理端与导师端待实现）
 ```
 
 ## 服务端
@@ -27,4 +27,4 @@ npm run dev        # http://localhost:5173
 ```
 
 开发期由 Vite 把 `/user`、`/form`、`/healthz` 代理到 `http://localhost:3000`，请先启动服务端。
-登录、路由与目录约定见 [ui/README.md](./ui/README.md)。
+登录、学生申请表、路由与目录约定见 [ui/README.md](./ui/README.md)。

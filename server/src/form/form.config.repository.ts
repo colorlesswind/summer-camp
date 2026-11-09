@@ -5,6 +5,7 @@ import type {
   OptionRow,
   ProgramRow,
   SectionRow,
+  StatementDefinitionRow,
   SubmissionWindowRow,
 } from './form.types';
 
@@ -56,6 +57,17 @@ export const formConfigRepository = {
   async listExams(): Promise<ExamRow[]> {
     const [rows] = await pool.execute<ExamRow[]>(
       `SELECT code, label_en, sort_order FROM exams WHERE is_active = TRUE ORDER BY sort_order, code`,
+    );
+    return rows;
+  },
+
+  /** 当前生效的条款原文，供前端渲染 Statement 小节 */
+  async listStatements(): Promise<StatementDefinitionRow[]> {
+    const [rows] = await pool.execute<StatementDefinitionRow[]>(
+      `SELECT code, version, text_en, text_zh, effective_from
+         FROM statement_definitions
+        WHERE is_active = TRUE AND effective_from <= CURDATE()
+        ORDER BY code, version`,
     );
     return rows;
   },

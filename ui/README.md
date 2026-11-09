@@ -2,7 +2,7 @@
 
 港科大（广州）夏令营报名系统的前端 SPA：Vue 3 + TypeScript + Vite + Ant Design Vue 4 + Vue Router 4 + Pinia + axios。
 
-当前阶段已完成登录页（学生验证码 / 管理员与导师密码），业务页面（申请列表、申请表、审核）以占位页形式预留路由，下一阶段填充。
+当前阶段已完成登录页、学生端申请表（配置驱动、Save / Submit / Resubmit、只读状态）与 Application Status 页；管理端、导师端的列表与审核页面仍以占位页预留，下一阶段填充。
 
 ## 快速开始
 
@@ -51,23 +51,31 @@ ui/
 │   ├── api/
 │   │   ├── http.ts                # axios、CSRF、401 单飞刷新、会话失效回调
 │   │   ├── problem.ts             # problem+json → ApiError（英文文案）
-│   │   └── auth.ts                # /user/otp、/user/logon、/user/me、/user/logout
+│   │   ├── auth.ts                # /user/otp、/user/logon、/user/me、/user/logout
+│   │   └── application.ts         # /form/schema、详情、Save、Submit、Resubmit、导师候选
 │   ├── assets/styles/             # reset / CSS 变量 / 全局排版
 │   ├── components/
 │   │   ├── BrandHeader.vue        # 校徽 + 功能枢纽 FUNCTION HUB
 │   │   └── AuthCard.vue           # 登录卡片外壳
 │   ├── composables/               # useCountdown、useMediaQuery
-│   ├── constants/                 # 应用常量、角色首页映射
+│   ├── constants/                 # 应用常量、角色首页映射、学生状态文案/颜色
 │   ├── features/auth/
 │   │   ├── views/LoginView.vue
 │   │   ├── components/            # 学生表单、员工表单、底部按钮
 │   │   ├── styles/login.css
 │   │   └── messages.ts            # 英文文案集中管理
-│   ├── layouts/                   # AuthLayout / MainLayout
-│   ├── pages/                     # 403、404、登录后占位页
+│   ├── features/application/
+│   │   ├── views/                 # StudentEntryView、ApplicationStatusView、ApplicationFormView
+│   │   ├── components/            # FormField、FormFieldGroup、RepeatableSection、StatementSection、SectionNav
+│   │   ├── composables/           # useApplicationForm、useSectionScrollSpy
+│   │   ├── field-groups.ts        # group_code 合并成一行/一列
+│   │   ├── messages.ts            # 页面文案与字段级错误翻译
+│   │   └── styles/application-form.css
+│   ├── layouts/                   # AuthLayout / MainLayout（支持 fullBleed）
+│   ├── pages/                     # 403、404、管理端/导师端占位页
 │   ├── router/                    # 路由表与守卫
 │   ├── stores/auth.ts             # 会话状态与登录动作
-│   ├── types/                     # 与后端对齐的 DTO
+│   ├── types/                     # 与后端对齐的 DTO（user / application / api）
 │   └── utils/                     # cookie、csrf、redirect 校验
 ├── env.d.ts
 ├── vite.config.ts
@@ -77,7 +85,6 @@ ui/
 下一阶段会在 `features/` 下新增：
 
 ```text
-features/application/   # 学生端：状态列表、配置驱动申请表、共享只读详情
 features/admin/         # 管理端：列表筛选、详情审核、批量 Send Offer
 features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 ```
@@ -88,8 +95,10 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 | ------------------------------- | ---------- | --------------------------------- |
 | `/login`                        | 游客       | 登录页（学生 / 员工模式切换）     |
 | `/`                             | 登录       | 按角色重定向到各自首页            |
-| `/applications`                 | student    | 占位：申请状态列表                |
-| `/applications/:id`             | student    | 占位：申请表表单                  |
+| `/start`                        | student    | 登录后分流：可填表 → `/applications/new`，其余 → `/applications` |
+| `/applications`                 | student    | Application Status（查看当前状态与入口） |
+| `/applications/new`             | student    | 新建申请表；已有申请时自动跳到详情 |
+| `/applications/:id`             | student    | 单页申请表（配置驱动，按状态只读） |
 | `/admin/applications`           | admin      | 占位：申请列表                    |
 | `/admin/applications/:id`       | admin      | 占位：申请详情                    |
 | `/supervisor/applications`      | supervisor | 占位：分配给当前导师的申请        |
@@ -97,6 +106,29 @@ features/supervisor/    # 导师端：名下申请列表、Recommend / Reject
 | `/403` `/404`                   | 公开       | 错误页                            |
 
 守卫逻辑：首次导航先 `GET /user/me` 恢复会话；未登录访问受保护路由会跳 `/login?redirect=...`；角色不匹配跳 `/403`；已登录访问 `/login` 直接回角色首页。
+
+## 学生申请表
+
+登录后先进入 `/start`：
+
+1. `GET /form/applications/mine` 没有申请，或状态是 `Draft` / `Returned` → `/applications/new`（已有申请时再自动跳到 `/applications/:id`）；
+2. 其余状态（审核中、Offer 已发/已接受/已拒绝）→ `/applications` 的 Application Status。
+
+页面能力：
+
+- **配置驱动**：`GET /form/schema` 返回的小节、字段、必填、选项、`group_code`、`dependsOnField` 决定页面结构；前端不写死字段。
+- **当前启用 6 个小节**：Personal Particulars、Program Choice、Personal Statement、Publications、Work Experience、Statement。Education / Awards / Supporting Documents / English Proficiency 在服务端 `is_enabled=0`，下一阶段再启用。
+- **分节导航**：顶部横栏按小节生成，滚动时用 scroll-spy 更新 active 下划线；点击可平滑跳转，横栏吸顶。
+- **组合字段**：`nameEn`、`idDocument`、`phone`、`expPeriod` 按 `group_code` 合并成一行/一列。
+- **可重复小节**：Publications / Work Experience 支持增删行，最多 20 行；提交时空行会被服务端丢弃。
+- **Save**：不校验必填；首次 Save 用 `POST /form/applications` 创建 Draft 并生成 Application No.，之后用 `PUT /form/applications/:id`。
+- **Submit / Resubmit**：先做客户端必填与跨字段校验，再 Save，最后调用 `submit` / `resubmit`；服务端校验失败时把字段级错误映射到对应控件并展示英文文案。
+- **只读状态**：服务端 `editable=false` 或状态不是 `Draft` / `Returned` 时，字段全部禁用，只保留 Previous；OfferSent 的 Accept / Decline 留到申请列表阶段。
+- **提交时间段**：`meta.canSaveDraft` / `meta.submissionWindow` 控制 Save、Submit 的显示与服务端 409 提示。
+- **未保存保护**：表单 dirty 时离开页面会二次确认；首次 Save 成功后 URL 自动从 `/applications/new` 替换为 `/applications/:id`，刷新可恢复。
+- **导师候选**：`GET /form/supervisors?programCode=...` 按 Program 过滤，下拉支持输入搜索；换 Program 会清空对应 Supervisor，第二志愿会排除第一志愿。
+
+页面文案与字段级错误翻译集中在 [`features/application/messages.ts`](./src/features/application/messages.ts)，日期使用 `dayjs`。
 
 ## 登录说明
 
@@ -159,7 +191,8 @@ server {
 ## 约定与后续
 
 - Ant Design Vue 采用**按需注册**（见 `src/main.ts`）；新增页面用到新组件时在 `main.ts` 追加 `app.use(...)`。
-- 所有 UI 文案为英文，集中在 `features/auth/messages.ts`；下一阶段建议按 feature 拆分 messages。
-- 申请表状态枚举、`displayStatus` 与角色端文案将在下一阶段统一放入 `constants/status.ts`。
-- 占位页（`pages/PlaceholderView.vue`）仅用于验证登录跳转与角色守卫，业务页面完成后删除。
+- 所有 UI 文案为英文；登录文案在 `features/auth/messages.ts`，申请表文案在 `features/application/messages.ts`。
+- 学生端状态文案与 Tag 颜色在 `constants/application.ts`（`STUDENT_STATUS_META`）；管理端/导师端文案下一阶段再加。
+- 申请表只读渲染当前用 disabled 控件，方便 admin/supervisor 直接复用同一套表单；下一阶段如需要更适合审阅的长文本换行展示，可在 `FormField` 增加 `presentation: 'readonly'` 分支。
+- 占位页（`pages/PlaceholderView.vue`）仍用于管理端/导师端，完成对应页面后删除。
 - 未引入 i18n 库，因为当前只要求英文界面。

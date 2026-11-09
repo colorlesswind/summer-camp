@@ -1,7 +1,7 @@
 import { assertSubmissionWindowOpen } from './application.state';
 import { conflict } from '../common/errors';
 import { formConfigRepository } from './form.config.repository';
-import type { ExamRow, FieldRow, OptionRow, ProgramRow, SectionRow } from './form.types';
+import type { ExamRow, FieldRow, OptionRow, ProgramRow, SectionRow, StatementDefinitionRow } from './form.types';
 
 export type ValueType = 'string' | 'number' | 'boolean' | 'date';
 
@@ -41,6 +41,13 @@ export interface SectionConfig {
   fields: FieldConfig[];
 }
 
+/** Statement 条款原文。fieldCode 是表单里对应的 checkbox 字段（consentDeclaration / consentMedia） */
+export interface StatementConfig {
+  code: string;
+  version: string;
+  textEn: string;
+}
+
 export interface CompiledForm {
   sections: SectionConfig[];
   enabledSections: SectionConfig[];
@@ -50,6 +57,7 @@ export interface CompiledForm {
   sectionByCode: Map<string, SectionConfig>;
   programs: FieldOptionConfig[];
   exams: FieldOptionConfig[];
+  statements: StatementConfig[];
 }
 
 export interface SubmissionWindowState {
@@ -73,6 +81,7 @@ const buildForm = (
   optionRows: OptionRow[],
   programRows: ProgramRow[],
   examRows: ExamRow[],
+  statementRows: StatementDefinitionRow[],
 ): CompiledForm => {
   const programs: FieldOptionConfig[] = programRows.map((row) => ({
     value: row.code,
@@ -126,6 +135,12 @@ const buildForm = (
 
   const fieldByCode = new Map(fields.map((field) => [field.code, field]));
 
+  const statements: StatementConfig[] = statementRows.map((row) => ({
+    code: row.code,
+    version: row.version,
+    textEn: row.text_en,
+  }));
+
   const sections: SectionConfig[] = sectionRows.map((row) => ({
     code: row.code,
     titleEn: row.title_en,
@@ -151,6 +166,7 @@ const buildForm = (
     sectionByCode: new Map(sections.map((section) => [section.code, section])),
     programs,
     exams,
+    statements,
   };
 };
 
@@ -167,15 +183,16 @@ export const formConfigService = {
       return cached.form;
     }
 
-    const [sectionRows, fieldRows, optionRows, programRows, examRows] = await Promise.all([
+    const [sectionRows, fieldRows, optionRows, programRows, examRows, statementRows] = await Promise.all([
       formConfigRepository.listSections(),
       formConfigRepository.listFields(),
       formConfigRepository.listOptions(),
       formConfigRepository.listPrograms(),
       formConfigRepository.listExams(),
+      formConfigRepository.listStatements(),
     ]);
 
-    const form = buildForm(sectionRows, fieldRows, optionRows, programRows, examRows);
+    const form = buildForm(sectionRows, fieldRows, optionRows, programRows, examRows, statementRows);
     cached = { form, builtAt: Date.now() };
     return form;
   },

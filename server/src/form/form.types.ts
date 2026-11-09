@@ -149,6 +149,14 @@ export interface ExamRow extends RowDataPacket {
   sort_order: number;
 }
 
+export interface StatementDefinitionRow extends RowDataPacket {
+  code: string;
+  version: string;
+  text_en: string;
+  text_zh: string | null;
+  effective_from: Date;
+}
+
 export interface SubmissionWindowRow extends RowDataPacket {
   id: string;
   label: string | null;

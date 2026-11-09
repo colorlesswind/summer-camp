@@ -1,5 +1,18 @@
 import { createApp } from 'vue';
-import { Button, ConfigProvider, Form, Input, Result, Tag } from 'ant-design-vue';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  ConfigProvider,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Result,
+  Select,
+  Spin,
+  Tag,
+} from 'ant-design-vue';
 import 'ant-design-vue/dist/reset.css';
 import '@/assets/styles/reset.css';
 import '@/assets/styles/tokens.css';
@@ -15,10 +28,16 @@ const app = createApp(App);
 app.use(pinia);
 // 只注册当前用到的组件；新增页面时按需补充，避免全量引入
 app.use(ConfigProvider);
+app.use(Alert);
 app.use(Button);
+app.use(Checkbox);
+app.use(DatePicker);
 app.use(Form);
 app.use(Input);
+app.use(InputNumber);
 app.use(Result);
+app.use(Select);
+app.use(Spin);
 app.use(Tag);
 app.use(router);
 

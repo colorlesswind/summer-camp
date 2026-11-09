@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import BrandHeader from '@/components/BrandHeader.vue';
 import { ROLE_LABELS } from '@/constants/roles';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
 const loggingOut = ref(false);
 
 const roleLabel = computed(() => (auth.role ? ROLE_LABELS[auth.role] : ''));
+const isFullBleed = computed(() => route.meta.fullBleed === true);
 
 async function handleLogout(): Promise<void> {
   loggingOut.value = true;
@@ -38,7 +40,7 @@ async function handleLogout(): Promise<void> {
       </template>
     </BrandHeader>
 
-    <main class="main-layout__content">
+    <main class="main-layout__content" :class="{ 'main-layout__content--bleed': isFullBleed }">
       <router-view />
     </main>
   </div>
@@ -75,9 +77,17 @@ async function handleLogout(): Promise<void> {
   padding: 24px 32px 40px;
 }
 
+.main-layout__content--bleed {
+  padding: 0;
+}
+
 @media (max-width: 640px) {
   .main-layout__content {
     padding: 16px 16px 32px;
+  }
+
+  .main-layout__content--bleed {
+    padding: 0;
   }
 
   .main-layout__email {

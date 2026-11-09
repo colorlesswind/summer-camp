@@ -505,21 +505,30 @@ POST /user/password/change
 ```json
 { "code": 0, "message": "ok", "data": {
   "meta": { "serverTime": "2026-11-09T00:24:03.000Z",
-            "submissionWindow": { "isOpen": true, "opensAt": "...", "closesAt": "..." } },
+            "submissionWindow": { "isOpen": true, "opensAt": "...", "closesAt": "..." },
+            "canSaveDraft": true },
   "sections": [
     { "code": "PERSONAL_PARTICULARS", "titleEn": "Personal Particulars", "payloadKey": null,
       "isRepeatable": false, "sortOrder": 10,
       "fields": [
         { "code": "gender", "labelEn": "Gender", "widget": "single_choice",
-          "isRequired": true, "optionsSource": "static",
+          "valueType": "string", "isRequired": true, "optionsSource": "static",
           "options": [{ "value": "MALE", "labelEn": "Male" }, { "value": "FEMALE", "labelEn": "Female" }] },
         { "code": "supervisorFirstId", "widget": "single_choice", "valueType": "number",
           "optionsSource": "supervisors_by_thrust", "dependsOnField": "programFirstId" }
       ] }
   ],
+  "statements": [
+    { "fieldCode": "consentDeclaration", "code": "DECLARATION", "version": "v1", "textEn": "..." },
+    { "fieldCode": "consentMedia", "code": "MEDIA_CONSENT", "version": "v1", "textEn": "..." }
+  ],
   "enums": { "programs": [{ "value": "AMAT", "labelEn": "PhD in Advanced Materials(AMAT)" }] }
 } }
 ```
+
+- `meta.canSaveDraft`：新建/草稿是否还能保存（提交窗口全部结束后为 `false`）；
+- `fields[].valueType`：前端据此把表单值转成 string / number / boolean / date；
+- `statements[].fieldCode`：Statement 小节的 checkbox 字段 → 条款原文，前端直接用服务端配置渲染，避免把条款硬编码在页面里。
 
 **`GET /form/applications`（学生视角）**
 

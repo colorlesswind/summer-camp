@@ -11,6 +11,8 @@ declare module 'vue-router' {
     /** 允许访问的角色；不填表示登录即可 */
     roles?: UserRole[];
     title?: string;
+    /** 页面自己管理全宽布局（去掉 MainLayout 的内边距） */
+    fullBleed?: boolean;
   }
 }
 
@@ -20,6 +22,9 @@ const LoginView = () => import('@/features/auth/views/LoginView.vue');
 const ForbiddenView = () => import('@/pages/ForbiddenView.vue');
 const NotFoundView = () => import('@/pages/NotFoundView.vue');
 const PlaceholderView = () => import('@/pages/PlaceholderView.vue');
+const StudentEntryView = () => import('@/features/application/views/StudentEntryView.vue');
+const ApplicationStatusView = () => import('@/features/application/views/ApplicationStatusView.vue');
+const ApplicationFormView = () => import('@/features/application/views/ApplicationFormView.vue');
 
 export const routes: RouteRecordRaw[] = [
   {
@@ -59,16 +64,28 @@ export const routes: RouteRecordRaw[] = [
         redirect: () => useAuthStore().homePath,
       },
       {
+        path: 'start',
+        name: 'student-start',
+        component: StudentEntryView,
+        meta: { roles: ['student'], title: 'Application Status' },
+      },
+      {
         path: 'applications',
         name: 'student-applications',
-        component: PlaceholderView,
+        component: ApplicationStatusView,
         meta: { roles: ['student'], title: 'Application Status' },
+      },
+      {
+        path: 'applications/new',
+        name: 'student-application-new',
+        component: ApplicationFormView,
+        meta: { roles: ['student'], title: 'Application Form', fullBleed: true },
       },
       {
         path: 'applications/:id',
         name: 'student-application-detail',
-        component: PlaceholderView,
-        meta: { roles: ['student'], title: 'Application Form' },
+        component: ApplicationFormView,
+        meta: { roles: ['student'], title: 'Application Form', fullBleed: true },
       },
       {
         path: 'admin/applications',

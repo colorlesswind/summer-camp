@@ -40,6 +40,11 @@ const CONSENT_STATEMENTS: Record<string, string> = {
   consentMedia: 'MEDIA_CONSENT',
 };
 
+/** 反向映射：statement_definitions.code → 表单字段 code，用于 /form/schema 下发给前端 */
+const STATEMENT_FIELD_BY_CODE: Record<string, string> = Object.fromEntries(
+  Object.entries(CONSENT_STATEMENTS).map(([fieldCode, statementCode]) => [statementCode, fieldCode]),
+);
+
 const STATEMENT_VERSION = 'v1';
 
 /** 批量 Send Offer：单条子流程超时时间（需求 2.2「超时认为处理失败」） */
@@ -288,12 +293,17 @@ export const formService = {
 
   async getSchema() {
     const form = await formConfigService.getCompiled();
-    const windowState = await formConfigService.getWindowState(new Date());
+    const now = new Date();
+    const [windowState, canSaveDraft] = await Promise.all([
+      formConfigService.getWindowState(now),
+      formConfigService.isSaveAllowed(now),
+    ]);
 
     return {
       meta: {
-        serverTime: new Date().toISOString(),
+        serverTime: now.toISOString(),
         submissionWindow: windowState,
+        canSaveDraft,
       },
       sections: form.enabledSections.map((section) => ({
         code: section.code,
@@ -309,6 +319,7 @@ export const formService = {
           labelEn: field.labelEn,
           labelZh: field.labelZh,
           widget: field.widget,
+          valueType: field.valueType,
           isRequired: field.isRequired,
           maxLength: field.maxLength,
           optionsSource: field.optionsSource,
@@ -317,6 +328,14 @@ export const formService = {
           options: field.options.length > 0 ? field.options : undefined,
         })),
       })),
+      statements: form.statements
+        .filter((statement) => STATEMENT_FIELD_BY_CODE[statement.code] !== undefined)
+        .map((statement) => ({
+          fieldCode: STATEMENT_FIELD_BY_CODE[statement.code],
+          code: statement.code,
+          version: statement.version,
+          textEn: statement.textEn,
+        })),
       enums: {
         programs: form.programs,
         exams: form.exams,
