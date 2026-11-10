@@ -15,7 +15,6 @@ summer-camp
 - [演示模式](#演示模式)
   - [模式一：后端跑 Docker 镜像 + 前端跑 Vite dev server（推荐）](#模式一推荐后端跑-docker-镜像--前端跑-vite-dev-server推荐)
   - [模式二：前后端都用本地 npm 启动（需要自备 MySQL）](#模式二前后端都用本地-npm-启动需要自备-mysql)
-- [单元测试](#单元测试)
 - [POSTMAN Collections](#postman-collections)
   - [通用前置](#通用前置)
   - [一、Auth：注册与登录流程](#一auth注册与登录流程)
@@ -107,19 +106,6 @@ cd ui
 npm install
 npm run dev        # http://localhost:5173
 ```
-
-## 单元测试
-
-前后端各有一套 Vitest 单测，**跑测试不需要 MySQL / SMTP / 外网**（持久层与第三方调用都 mock，环境变量由测试固定注入）：
-
-```bash
-cd server && npm test              # 服务端：28 个文件 / 439 个用例（含 supertest 的 HTTP 集成用例）
-cd ui     && npm test              # 前端：utils / api / stores / router / composables / 组件
-
-cd server && npm run test:typecheck # 测试代码的类型检查（tsconfig.test.json）
-```
-
-细节见 [server/README.md 第 11 节](./server/README.md#11-单元测试) 与 [ui/README.md](./ui/README.md#单元测试)。
 
 ## POSTMAN Collections
 
