@@ -17,6 +17,7 @@ import {
   toDisplayStatus,
 } from './form.display';
 import { formRepository, type ConsentInput, type ProgramChoiceInput } from './form.repository';
+import { supervisorQuota } from './form.quota';
 import { isNil, validateRowItems, validateScalarValues } from './form.validation';
 import { supervisorRepository } from './supervisor.repository';
 import type {
@@ -218,6 +219,9 @@ export interface SupervisorOption {
   userEmpId: string;
   thrustCode: string;
   deptNameEn: string;
+  /** 剩余名额（需求 2.1），前端据此禁用已满导师 */
+  remaining: number;
+  isFull: boolean;
 }
 
 export interface BatchFailure {
@@ -350,23 +354,30 @@ export const formService = {
     }
 
     const rows = await supervisorRepository.searchByProgram(programCode, keyword, limit);
-    return rows.map((row) => ({
-      id: Number(row.id),
-      name: row.name,
-      nameZh: row.name_zh,
-      userEmpId: row.user_emp_id,
-      thrustCode: row.thrust_code,
-      deptNameEn: row.dept_name_en,
-    }));
+    return rows.map((row) => {
+      const remaining = Math.max(0, Number(row.quota_capacity) - Number(row.quota_used));
+      return {
+        id: Number(row.id),
+        name: row.name,
+        nameZh: row.name_zh,
+        userEmpId: row.user_emp_id,
+        thrustCode: row.thrust_code,
+        deptNameEn: row.dept_name_en,
+        remaining,
+        isFull: remaining === 0,
+      };
+    });
   },
 
   // ---------------- 列表 / 详情 ----------------
 
-  async resolveScope(auth: AuthContext): Promise<ApplicationScope> {
+  async resolveScope(auth: AuthContext, conn?: PoolConnection): Promise<ApplicationScope> {
     if (auth.role !== 'supervisor') {
       return { role: auth.role, userId: auth.userId, supervisorId: null };
     }
-    const supervisor = await supervisorRepository.findByUserId(auth.userId);
+    const supervisor = conn
+      ? await supervisorRepository.findByUserId(auth.userId, conn)
+      : await supervisorRepository.findByUserId(auth.userId);
     if (!supervisor) {
       throw forbidden('当前账号尚未绑定导师档案，无法查看申请', { code: 'supervisor_not_registered' });
     }
@@ -488,7 +499,7 @@ export const formService = {
     const prepared = await this.prepareSave(form, values, {});
 
     const createdId = await withTransaction(async (conn) => {
-      const existing = await formRepository.findByUserId(auth.userId);
+      const existing = await formRepository.findByUserId(auth.userId, conn);
       if (existing) {
         throw conflict('该账号已存在申请，请直接编辑', {
           code: 'application_exists',
@@ -535,11 +546,11 @@ export const formService = {
       assertOwnership(auth.userId, row.user_id);
       assertCan('save', auth.role, row.status);
       if (row.status === 'Draft') {
-        await formConfigService.assertSaveAllowed(now);
+        await formConfigService.assertSaveAllowed(now, conn);
       }
 
-      const existing = await this.loadValues(id, form);
-      const prepared = await this.prepareSave(form, values, existing);
+      const existing = await this.loadValues(id, form, conn);
+      const prepared = await this.prepareSave(form, values, existing, conn);
       await this.persist(conn, id, prepared, now);
 
       if (prepared.touchedChoice) {
@@ -567,8 +578,8 @@ export const formService = {
   },
 
   async submit(auth: AuthContext, id: string): Promise<ApplicationDetail> {
-    return this.transition(auth, id, 'submit', async (row, now) => {
-      if (row.status === 'Draft') await formConfigService.assertSubmitAllowed(now);
+    return this.transition(auth, id, 'submit', async (row, now, conn) => {
+      if (row.status === 'Draft') await formConfigService.assertSubmitAllowed(now, conn);
     });
   },
 
@@ -648,13 +659,13 @@ export const formService = {
 
   // ---------------- 内部实现 ----------------
 
-  async loadValues(id: string, form: CompiledForm): Promise<FormValues> {
+  async loadValues(id: string, form: CompiledForm, conn?: PoolConnection): Promise<FormValues> {
     const [details, choices, publications, experiences, consents] = await Promise.all([
-      formRepository.loadDetails(id),
-      formRepository.loadChoices(id),
-      formRepository.loadPublications(id),
-      formRepository.loadExperiences(id),
-      formRepository.loadConsents(id),
+      formRepository.loadDetails(id, conn),
+      formRepository.loadChoices(id, conn),
+      formRepository.loadPublications(id, conn),
+      formRepository.loadExperiences(id, conn),
+      formRepository.loadConsents(id, conn),
     ]);
 
     const values: FormValues = {};
@@ -698,7 +709,12 @@ export const formService = {
   },
 
   /** 把前端提交的 values 校验并拆成「明细 / 志愿 / 子表 / 声明」四组可落库数据 */
-  async prepareSave(form: CompiledForm, raw: FormValues, existing: FormValues): Promise<PreparedSave> {
+  async prepareSave(
+    form: CompiledForm,
+    raw: FormValues,
+    existing: FormValues,
+    conn?: PoolConnection,
+  ): Promise<PreparedSave> {
     const repeatableKeys = new Set(
       form.enabledSections
         .filter((section) => section.isRepeatable && section.payloadKey)
@@ -722,7 +738,7 @@ export const formService = {
 
     const merged: FormValues = { ...existing, ...values };
     const crossIssues: ValidationIssue[] = [];
-    await this.crossCheck(form, merged, crossIssues, 'save');
+    await this.crossCheck(form, merged, crossIssues, 'save', conn);
     if (crossIssues.length > 0) throw validationError(crossIssues);
 
     const details: Array<[string, unknown]> = [];
@@ -788,6 +804,7 @@ export const formService = {
     values: FormValues,
     issues: ValidationIssue[],
     mode: 'save' | 'submit',
+    conn?: PoolConnection,
   ): Promise<void> {
     const firstProgram = values.programFirstId;
     const secondProgram = values.programSecondId;
@@ -818,7 +835,7 @@ export const formService = {
     const ids = [firstSupervisor, secondSupervisor].filter((value): value is number => value !== null);
     if (ids.length === 0) return;
 
-    const thrusts = await supervisorRepository.findThrustByIds(ids);
+    const thrusts = await supervisorRepository.findThrustByIds(ids, conn);
 
     const check = (supervisorId: number | null, program: unknown, path: string, label: string): void => {
       if (supervisorId === null) return;
@@ -844,7 +861,7 @@ export const formService = {
     auth: AuthContext,
     id: string,
     action: ApplicationAction,
-    precheck?: (row: ApplicationRow, now: Date) => Promise<void>,
+    precheck?: (row: ApplicationRow, now: Date, conn: PoolConnection) => Promise<void>,
     options: { returnReason?: string | null; remark?: string | null } = {},
   ): Promise<ApplicationDetail> {
     const now = new Date();
@@ -857,23 +874,30 @@ export const formService = {
       if (auth.role === 'student') {
         assertOwnership(auth.userId, row.user_id);
       } else if (auth.role === 'supervisor') {
-        const scope = await this.resolveScope(auth);
+        const scope = await this.resolveScope(auth, conn);
         const assigned = toNumberOrNull(row.reviewer_supervisor_id) === scope.supervisorId;
         if (!assigned || !isVisibleToSupervisor(row.status)) throw notFound('申请不存在');
       }
 
       assertCan(action, auth.role, row.status);
-      if (precheck) await precheck(row, now);
+      if (precheck) await precheck(row, now, conn);
 
-      // Submit / Resubmit 校验的是「库里已保存的内容」，不是本次请求体
+      // Submit / Resubmit 校验的是「库里已保存的内容」，不是本次请求体。
+      // 事务内一律复用 conn 读取，避免持锁期间再向连接池借连接。
       if (action === 'submit' || action === 'resubmit') {
-        const storedValues = await this.loadValues(id, form);
-        const issues = await this.validateForSubmit(form, storedValues);
+        const storedValues = await this.loadValues(id, form, conn);
+        const issues = await this.validateForSubmit(form, storedValues, conn);
         if (issues.length > 0) throw validationError(issues);
       }
 
       const toStatus = nextStatus(action, row.status);
-      const firstChoiceSupervisorId = await this.findFirstChoiceSupervisor(id);
+      const choices = await formRepository.loadChoices(id, conn);
+      const firstChoiceSupervisorId = toNumberOrNull(
+        choices.find((choice) => choice.choice_rank === 1)?.supervisor_id ?? null,
+      );
+      // 名额（需求 2.1）与状态变更在同一事务内提交，避免「占了名额但提交失败」，
+      // 也避免「提交成功却没占名额」
+      const quotaSupervisorId = await this.applyQuota(conn, action, row, firstChoiceSupervisorId, now);
 
       await formRepository.updateStatus(conn, id, {
         status: toStatus,
@@ -883,6 +907,7 @@ export const formService = {
           action === 'return' ? (options.returnReason ?? '') : action === 'resubmit' ? null : undefined,
         reviewerSupervisorId:
           action === 'submit' || action === 'resubmit' ? firstChoiceSupervisorId : undefined,
+        quotaSupervisorId,
       });
 
       await formRepository.insertLog(conn, {
@@ -900,14 +925,51 @@ export const formService = {
     return this.getDetail(auth, id);
   },
 
-  async findFirstChoiceSupervisor(id: string): Promise<number | null> {
-    const choices = await formRepository.loadChoices(id);
-    const first = choices.find((choice) => choice.choice_rank === 1);
-    return toNumberOrNull(first?.supervisor_id ?? null);
+  /**
+   * 名额占位迁移（需求 2.1），必须跑在 transition 的事务连接上：
+   *   Submit / Resubmit -> 占用第一志愿导师名额；导师没变则 no-op（不重复占用），
+   *                        换导师则同一事务内「释放旧 + 占用新」
+   *   Supervisor Reject / 学生 Decline Offer -> 释放当前占位
+   * 其他动作不涉及名额：Returned 期间继续占位，Accept Offer 后名额转为最终占用。
+   *
+   * 返回值写回 applications.quota_supervisor_id：
+   *   number -> 当前占位的导师；null -> 已释放/未占用；undefined -> 本次不改。
+   */
+  async applyQuota(
+    conn: PoolConnection,
+    action: ApplicationAction,
+    row: ApplicationRow,
+    firstChoiceSupervisorId: number | null,
+    now: Date,
+  ): Promise<number | null | undefined> {
+    const current = toNumberOrNull(row.quota_supervisor_id);
+
+    if (action === 'submit' || action === 'resubmit') {
+      if (firstChoiceSupervisorId === null) {
+        // 表单配置可能关掉第一志愿必填：没有导师就没有名额可占
+        if (current === null) return null;
+        await supervisorQuota.release(conn, current, now);
+        return null;
+      }
+      await supervisorQuota.transfer(conn, current, firstChoiceSupervisorId, now);
+      return firstChoiceSupervisorId;
+    }
+
+    if (action === 'reject' || action === 'decline_offer') {
+      if (current === null) return undefined;
+      await supervisorQuota.release(conn, current, now);
+      return null;
+    }
+
+    return undefined;
   },
 
   /** Submit 侧完整校验：必填 + 类型 + 跨字段 */
-  async validateForSubmit(form: CompiledForm, values: FormValues): Promise<ValidationIssue[]> {
+  async validateForSubmit(
+    form: CompiledForm,
+    values: FormValues,
+    conn?: PoolConnection,
+  ): Promise<ValidationIssue[]> {
     const scalarFields = form.enabledFields.filter((field) => {
       const section = form.sectionByCode.get(field.sectionCode);
       return section !== undefined && !section.isRepeatable && field.widget !== 'readonly';
@@ -919,7 +981,7 @@ export const formService = {
     }
 
     const { issues } = validateScalarValues(scalarRaw, scalarFields, 'submit');
-    await this.crossCheck(form, values, issues, 'submit');
+    await this.crossCheck(form, values, issues, 'submit', conn);
     return issues;
   },
 };

@@ -1,4 +1,4 @@
-import type { PoolConnection, ResultSetHeader } from 'mysql2/promise';
+import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import { newId } from '../common/crypto';
 import { internal } from '../common/errors';
 import { pool } from '../db/pool';
@@ -15,7 +15,7 @@ import type {
 } from './form.types';
 
 const APPLICATION_COLUMNS =
-  'id, application_number, user_id, status, reviewer_supervisor_id, submitted_at, status_changed_at, return_reason, created_at, updated_at';
+  'id, application_number, user_id, status, reviewer_supervisor_id, quota_supervisor_id, submitted_at, status_changed_at, return_reason, created_at, updated_at';
 
 const LIST_COLUMNS =
   'application_id, application_number, status, status_changed_at, return_reason, reviewer_supervisor_id, ' +
@@ -23,6 +23,21 @@ const LIST_COLUMNS =
 
 /** 预处理语句允许的标量类型（mysql2 的 ExecuteValues） */
 type SqlParam = string | number | boolean | Date | null;
+
+/**
+ * 统一的只读查询入口：传 conn 时走调用方事务，避免事务持有连接期间
+ * 再向连接池借第二条连接（500 并发 Submit 时会造成池耗尽、互相等待）。
+ */
+const executeRows = async <T extends RowDataPacket>(
+  sql: string,
+  params: ReadonlyArray<SqlParam>,
+  conn?: PoolConnection,
+): Promise<T[]> => {
+  const [rows] = conn
+    ? await conn.execute<T[]>(sql, params as SqlParam[])
+    : await pool.execute<T[]>(sql, params as SqlParam[]);
+  return rows;
+};
 
 /** 列名来自 form_fields.storage_column，虽然可信，仍然做一次白名单校验 */
 const assertIdentifier = (name: string): string => {
@@ -58,6 +73,8 @@ export interface StatusUpdateInput {
   submittedAt?: Date | null;
   returnReason?: string | null;
   reviewerSupervisorId?: number | null;
+  /** 名额占位导师（需求 2.1）：null=释放，undefined=本次不改 */
+  quotaSupervisorId?: number | null;
   now: Date;
 }
 
@@ -143,11 +160,11 @@ export const formRepository = {
     return rows[0] ?? null;
   },
 
-  async findByUserId(userId: string): Promise<ApplicationRow | null> {
-    const [rows] = await pool.execute<ApplicationRow[]>(
-      `SELECT ${APPLICATION_COLUMNS} FROM applications WHERE user_id = ? LIMIT 1`,
-      [userId],
-    );
+  async findByUserId(userId: string, conn?: PoolConnection): Promise<ApplicationRow | null> {
+    const sql = `SELECT ${APPLICATION_COLUMNS} FROM applications WHERE user_id = ? LIMIT 1`;
+    const [rows] = conn
+      ? await conn.execute<ApplicationRow[]>(sql, [userId])
+      : await pool.execute<ApplicationRow[]>(sql, [userId]);
     return rows[0] ?? null;
   },
 
@@ -193,6 +210,10 @@ export const formRepository = {
     if (input.reviewerSupervisorId !== undefined) {
       assignments.push('reviewer_supervisor_id = ?');
       params.push(input.reviewerSupervisorId);
+    }
+    if (input.quotaSupervisorId !== undefined) {
+      assignments.push('quota_supervisor_id = ?');
+      params.push(input.quotaSupervisorId);
     }
     params.push(id);
 
@@ -261,10 +282,11 @@ export const formRepository = {
     );
   },
 
-  async loadDetails(applicationId: string): Promise<ApplicationDetailsRow | null> {
-    const [rows] = await pool.execute<ApplicationDetailsRow[]>(
+  async loadDetails(applicationId: string, conn?: PoolConnection): Promise<ApplicationDetailsRow | null> {
+    const rows = await executeRows<ApplicationDetailsRow>(
       'SELECT * FROM application_details WHERE application_id = ? LIMIT 1',
       [applicationId],
+      conn,
     );
     return rows[0] ?? null;
   },
@@ -297,15 +319,15 @@ export const formRepository = {
     }
   },
 
-  async loadChoices(applicationId: string): Promise<ProgramChoiceRow[]> {
-    const [rows] = await pool.execute<ProgramChoiceRow[]>(
+  async loadChoices(applicationId: string, conn?: PoolConnection): Promise<ProgramChoiceRow[]> {
+    return executeRows<ProgramChoiceRow>(
       `SELECT id, application_id, choice_rank, program_code, supervisor_id
          FROM application_program_choices
         WHERE application_id = ?
         ORDER BY choice_rank`,
       [applicationId],
+      conn,
     );
-    return rows;
   },
 
   // ---------------- 可重复小节 ----------------
@@ -330,26 +352,26 @@ export const formRepository = {
     }
   },
 
-  async loadPublications(applicationId: string): Promise<PublicationRow[]> {
-    const [rows] = await pool.execute<PublicationRow[]>(
+  async loadPublications(applicationId: string, conn?: PoolConnection): Promise<PublicationRow[]> {
+    return executeRows<PublicationRow>(
       `SELECT id, row_no, title, venue, authors, publish_date, publication_status, url
          FROM application_publications
         WHERE application_id = ?
         ORDER BY row_no`,
       [applicationId],
+      conn,
     );
-    return rows;
   },
 
-  async loadExperiences(applicationId: string): Promise<ExperienceRow[]> {
-    const [rows] = await pool.execute<ExperienceRow[]>(
+  async loadExperiences(applicationId: string, conn?: PoolConnection): Promise<ExperienceRow[]> {
+    return executeRows<ExperienceRow>(
       `SELECT id, row_no, experience_type, organization, position, period_start, period_end, responsibilities
          FROM application_experiences
         WHERE application_id = ?
         ORDER BY row_no`,
       [applicationId],
+      conn,
     );
-    return rows;
   },
 
   // ---------------- 声明勾选 ----------------
@@ -375,14 +397,14 @@ export const formRepository = {
     }
   },
 
-  async loadConsents(applicationId: string): Promise<ConsentRow[]> {
-    const [rows] = await pool.execute<ConsentRow[]>(
+  async loadConsents(applicationId: string, conn?: PoolConnection): Promise<ConsentRow[]> {
+    return executeRows<ConsentRow>(
       `SELECT application_id, statement_code, statement_version, agreed, agreed_at
          FROM application_consents
         WHERE application_id = ?`,
       [applicationId],
+      conn,
     );
-    return rows;
   },
 
   // ---------------- 列表 ----------------

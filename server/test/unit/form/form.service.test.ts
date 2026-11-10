@@ -4,7 +4,7 @@ import type {
   ApplicationListRow,
   ApplicationRow,
   StatusLogRow,
-  SupervisorRow,
+  SupervisorWithQuotaRow,
 } from '@src/form/form.types';
 import type { CompiledForm, FieldConfig, SectionConfig } from '@src/form/form.config.service';
 
@@ -55,11 +55,19 @@ vi.mock('@src/form/supervisor.repository', () => ({
     findThrustByIds: vi.fn(),
   },
 }));
+vi.mock('@src/form/form.quota', () => ({
+  supervisorQuota: {
+    acquire: vi.fn(),
+    release: vi.fn(),
+    transfer: vi.fn(),
+  },
+}));
 
 import { formService } from '@src/form/form.service';
 import { formConfigService } from '@src/form/form.config.service';
 import { formRepository } from '@src/form/form.repository';
 import { supervisorRepository } from '@src/form/supervisor.repository';
+import { supervisorQuota } from '@src/form/form.quota';
 import { withTransaction } from '@src/db/pool';
 import { AppError } from '@src/common/errors';
 
@@ -71,6 +79,7 @@ const assertSubmitAllowed = vi.mocked(formConfigService.assertSubmitAllowed);
 
 const repo = vi.mocked(formRepository);
 const supervisors = vi.mocked(supervisorRepository);
+const quota = vi.mocked(supervisorQuota);
 const runTransaction = vi.mocked(withTransaction);
 
 const field = (over: Record<string, unknown> & { code: string }): FieldConfig => {
@@ -188,6 +197,7 @@ const applicationRow = (over: Record<string, unknown> = {}): ApplicationRow =>
     user_id: 'user-1',
     status: 'Draft',
     reviewer_supervisor_id: 7,
+    quota_supervisor_id: null,
     submitted_at: null,
     status_changed_at: new Date('2026-03-01T00:00:00.000Z'),
     return_reason: null,
@@ -208,7 +218,7 @@ const logRow = (over: Record<string, unknown> = {}): StatusLogRow =>
     ...over,
   }) as unknown as StatusLogRow;
 
-const supervisorRow = (over: Record<string, unknown> = {}): SupervisorRow =>
+const supervisorRow = (over: Record<string, unknown> = {}): SupervisorWithQuotaRow =>
   ({
     id: 7,
     user_emp_id: 'E007',
@@ -218,8 +228,10 @@ const supervisorRow = (over: Record<string, unknown> = {}): SupervisorRow =>
     thrust_code: 'AMAT',
     dept_name_en: 'Math',
     is_active: 1,
+    quota_capacity: 50,
+    quota_used: 0,
     ...over,
-  }) as unknown as SupervisorRow;
+  }) as unknown as SupervisorWithQuotaRow;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -261,6 +273,10 @@ beforeEach(() => {
   supervisors.findByUserId.mockResolvedValue(supervisorRow());
   supervisors.searchByProgram.mockResolvedValue([supervisorRow()]);
   supervisors.findThrustByIds.mockResolvedValue(new Map([[7, 'AMAT']]));
+
+  quota.acquire.mockResolvedValue(undefined);
+  quota.release.mockResolvedValue(undefined);
+  quota.transfer.mockResolvedValue(undefined);
 
   runTransaction.mockImplementation(async (fn) => fn({} as never));
 });
@@ -309,8 +325,27 @@ describe('formService.searchSupervisors', () => {
 
     expect(supervisors.searchByProgram).toHaveBeenCalledWith('AMAT', 'dr', 10);
     expect(items).toEqual([
-      { id: 7, name: 'Dr. A', nameZh: null, userEmpId: 'E007', thrustCode: 'AMAT', deptNameEn: 'Math' },
+      {
+        id: 7,
+        name: 'Dr. A',
+        nameZh: null,
+        userEmpId: 'E007',
+        thrustCode: 'AMAT',
+        deptNameEn: 'Math',
+        remaining: 50,
+        isFull: false,
+      },
     ]);
+  });
+
+  it('名额用尽 -> remaining=0 / isFull=true（前端据此禁用选项）', async () => {
+    supervisors.searchByProgram.mockResolvedValue([
+      supervisorRow({ quota_capacity: 50, quota_used: 50 }),
+    ]);
+
+    const items = await formService.searchSupervisors('AMAT', undefined, 20);
+
+    expect(items[0]).toMatchObject({ id: 7, remaining: 0, isFull: true });
   });
 });
 
@@ -867,6 +902,153 @@ describe('formService 状态流转', () => {
   it('导师操作未分配给自己的申请 -> 404', async () => {
     repo.lockById = vi.fn().mockResolvedValue(applicationRow({ status: 'PendingSupervisorReview', reviewer_supervisor_id: 8 }));
     await expect(formService.recommend(auth('supervisor'), 'app-1')).rejects.toMatchObject({ status: 404 });
+  });
+
+  describe('名额占位（需求 2.1）', () => {
+    const firstChoice = (supervisorId: number) => [
+      {
+        id: `choice-${supervisorId}`,
+        application_id: 'app-1',
+        choice_rank: 1,
+        program_code: 'AMAT',
+        supervisor_id: supervisorId,
+      },
+    ];
+
+    const submitAs = async (): Promise<void> => {
+      vi.spyOn(formService, 'loadValues').mockResolvedValue({ nameEn: 'Alice' });
+      vi.spyOn(formService, 'validateForSubmit').mockResolvedValue([]);
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+      await formService.submit(auth('student'), 'app-1');
+    };
+
+    it('submit：在同一事务里占用名额，并写回 quotaSupervisorId', async () => {
+      const conn = { name: 'tx-conn' };
+      runTransaction.mockImplementation(async (fn) => fn(conn as never));
+      repo.lockById = vi.fn().mockResolvedValue(applicationRow({ status: 'Draft' }));
+      repo.loadChoices.mockResolvedValue(firstChoice(7) as never);
+
+      await submitAs();
+
+      expect(quota.transfer).toHaveBeenCalledWith(conn, null, 7, expect.any(Date));
+      expect(repo.updateStatus).toHaveBeenCalledWith(
+        conn,
+        'app-1',
+        expect.objectContaining({ quotaSupervisorId: 7 }),
+      );
+    });
+
+    it('submit：名额已满 -> 409 quota_full，状态与日志都不写', async () => {
+      repo.lockById = vi.fn().mockResolvedValue(applicationRow({ status: 'Draft' }));
+      repo.loadChoices.mockResolvedValue(firstChoice(7) as never);
+      quota.transfer.mockRejectedValue(
+        new AppError(409, 'conflict', '名额已满', { code: 'quota_full', supervisorId: 7 }),
+      );
+
+      await expect(submitAs()).rejects.toMatchObject({
+        status: 409,
+        details: { code: 'quota_full' },
+      });
+      expect(repo.updateStatus).not.toHaveBeenCalled();
+      expect(repo.insertLog).not.toHaveBeenCalled();
+    });
+
+    it('resubmit：导师未变 -> transfer 收到相同 id，不重复占用', async () => {
+      repo.lockById = vi
+        .fn()
+        .mockResolvedValue(applicationRow({ status: 'Returned', quota_supervisor_id: 7 }));
+      repo.loadChoices.mockResolvedValue(firstChoice(7) as never);
+      vi.spyOn(formService, 'loadValues').mockResolvedValue({ nameEn: 'Alice' });
+      vi.spyOn(formService, 'validateForSubmit').mockResolvedValue([]);
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.resubmit(auth('student'), 'app-1');
+
+      expect(quota.transfer).toHaveBeenCalledWith(expect.anything(), 7, 7, expect.any(Date));
+      expect(repo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-1',
+        expect.objectContaining({ quotaSupervisorId: 7 }),
+      );
+    });
+
+    it('resubmit：换导师 -> 同一事务内从旧导师迁移到新导师', async () => {
+      repo.lockById = vi
+        .fn()
+        .mockResolvedValue(applicationRow({ status: 'Returned', quota_supervisor_id: 5 }));
+      repo.loadChoices.mockResolvedValue(firstChoice(7) as never);
+      vi.spyOn(formService, 'loadValues').mockResolvedValue({ nameEn: 'Alice' });
+      vi.spyOn(formService, 'validateForSubmit').mockResolvedValue([]);
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.resubmit(auth('student'), 'app-1');
+
+      expect(quota.transfer).toHaveBeenCalledWith(expect.anything(), 5, 7, expect.any(Date));
+      expect(repo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-1',
+        expect.objectContaining({ quotaSupervisorId: 7 }),
+      );
+    });
+
+    it('Supervisor Reject：释放名额并把 quotaSupervisorId 置空', async () => {
+      repo.lockById = vi.fn().mockResolvedValue(
+        applicationRow({ status: 'PendingSupervisorReview', quota_supervisor_id: 7 }),
+      );
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.reject(auth('supervisor'), 'app-1');
+
+      expect(quota.release).toHaveBeenCalledWith(expect.anything(), 7, expect.any(Date));
+      expect(repo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-1',
+        expect.objectContaining({ quotaSupervisorId: null }),
+      );
+    });
+
+    it('学生 Decline Offer：释放名额', async () => {
+      repo.lockById = vi.fn().mockResolvedValue(
+        applicationRow({ status: 'OfferSent', quota_supervisor_id: 7 }),
+      );
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.declineOffer(auth('student'), 'app-1');
+
+      expect(quota.release).toHaveBeenCalledWith(expect.anything(), 7, expect.any(Date));
+      expect(repo.updateStatus).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-1',
+        expect.objectContaining({ quotaSupervisorId: null }),
+      );
+    });
+
+    it('学生 Accept Offer：名额转为最终占用，不释放', async () => {
+      repo.lockById = vi.fn().mockResolvedValue(
+        applicationRow({ status: 'OfferSent', quota_supervisor_id: 7 }),
+      );
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.acceptOffer(auth('student'), 'app-1');
+
+      expect(quota.release).not.toHaveBeenCalled();
+      expect(quota.transfer).not.toHaveBeenCalled();
+      const input = repo.updateStatus.mock.calls.at(-1)?.[2] as { quotaSupervisorId?: unknown };
+      expect(input.quotaSupervisorId).toBeUndefined();
+    });
+
+    it('初筛通过 / Send Offer 等中间动作不动名额', async () => {
+      repo.lockById = vi.fn().mockResolvedValue(
+        applicationRow({ status: 'PendingForPreliminaryScreening', quota_supervisor_id: 7 }),
+      );
+      vi.spyOn(formService, 'getDetail').mockResolvedValue(detailResult);
+
+      await formService.approve(auth('admin'), 'app-1');
+
+      expect(quota.acquire).not.toHaveBeenCalled();
+      expect(quota.release).not.toHaveBeenCalled();
+      expect(quota.transfer).not.toHaveBeenCalled();
+    });
   });
 });
 

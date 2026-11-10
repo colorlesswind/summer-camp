@@ -1,5 +1,6 @@
+import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
 import { pool } from '../db/pool';
-import type { SupervisorRow } from './form.types';
+import type { SupervisorRow, SupervisorWithQuotaRow } from './form.types';
 
 /** 关键词里的 % 和 _ 需要转义，否则用户输入会被当成通配符 */
 const escapeLike = (keyword: string): string => keyword.replace(/[\\%_]/g, (char) => `\\${char}`);
@@ -14,20 +15,25 @@ export type BindOutcome = 'bound' | 'already_bound' | 'not_found' | 'conflict';
  * 靠 supervisors.user_id 关联。没绑定就查不到「分配给我的申请」。
  */
 export const supervisorRepository = {
-  async findByUserId(userId: string): Promise<SupervisorRow | null> {
-    const [rows] = await pool.execute<SupervisorRow[]>(
-      `SELECT id, user_emp_id, name, name_zh, email, thrust_code, dept_name_en, is_active
-         FROM supervisors
-        WHERE user_id = ?
-        LIMIT 1`,
-      [userId],
-    );
+  async findByUserId(userId: string, conn?: PoolConnection): Promise<SupervisorRow | null> {
+    const sql = `SELECT id, user_emp_id, name, name_zh, email, thrust_code, dept_name_en, is_active
+                   FROM supervisors
+                  WHERE user_id = ?
+                  LIMIT 1`;
+    const [rows] = conn
+      ? await conn.execute<SupervisorRow[]>(sql, [userId])
+      : await pool.execute<SupervisorRow[]>(sql, [userId]);
     return rows[0] ?? null;
   },
 
-  async searchByProgram(programCode: string, keyword: string | undefined, limit: number): Promise<SupervisorRow[]> {
+  async searchByProgram(
+    programCode: string,
+    keyword: string | undefined,
+    limit: number,
+  ): Promise<SupervisorWithQuotaRow[]> {
     const params: SqlParam[] = [programCode];
-    let sql = `SELECT id, user_emp_id, name, name_zh, email, thrust_code, dept_name_en, is_active
+    let sql = `SELECT id, user_emp_id, name, name_zh, email, thrust_code, dept_name_en, is_active,
+                      quota_capacity, quota_used
                  FROM supervisors
                 WHERE is_active = TRUE AND thrust_code = ?`;
     if (keyword && keyword.trim().length > 0) {
@@ -38,19 +44,28 @@ export const supervisorRepository = {
     sql += ' ORDER BY name LIMIT ?';
     params.push(limit);
 
-    const [rows] = await pool.execute<SupervisorRow[]>(sql, params);
+    const [rows] = await pool.execute<SupervisorWithQuotaRow[]>(sql, params);
     return rows;
   },
 
-  /** 校验「导师必须属于所选 Program」，返回 id → thrust_code */
-  async findThrustByIds(ids: readonly number[]): Promise<Map<number, string>> {
+  /**
+   * 校验「导师必须属于所选 Program」，返回 id → thrust_code。
+   * 传 conn 时走事务连接：Submit 校验发生在事务内，不能再向池子借第二条连接，
+   * 否则并发提交会把连接池占满并互相等待（500 并发场景的必修项）。
+   */
+  async findThrustByIds(
+    ids: readonly number[],
+    conn?: PoolConnection,
+  ): Promise<Map<number, string>> {
     if (ids.length === 0) return new Map();
     const unique = [...new Set(ids)];
     const placeholders = unique.map(() => '?').join(', ');
-    const [rows] = await pool.execute<Array<{ id: number; thrust_code: string } & import('mysql2/promise').RowDataPacket>>(
-      `SELECT id, thrust_code FROM supervisors WHERE id IN (${placeholders})`,
-      [...unique],
-    );
+    const sql = `SELECT id, thrust_code FROM supervisors WHERE id IN (${placeholders})`;
+    const params = [...unique];
+
+    const [rows] = conn
+      ? await conn.execute<Array<{ id: number; thrust_code: string } & RowDataPacket>>(sql, params)
+      : await pool.execute<Array<{ id: number; thrust_code: string } & RowDataPacket>>(sql, params);
     return new Map(rows.map((row) => [Number(row.id), row.thrust_code]));
   },
 

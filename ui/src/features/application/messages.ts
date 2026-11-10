@@ -25,6 +25,7 @@ export const APPLICATION_MESSAGES = {
   selectPlaceholder: 'Please select',
   searchSupervisor: 'Type a name to search',
   selectProgramFirst: 'Please select a program first',
+  supervisorFull: '(Full)',
   startApplication: 'Start application',
   openApplication: 'Open application',
   continueApplication: 'Continue application',

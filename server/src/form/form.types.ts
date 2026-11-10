@@ -9,6 +9,8 @@ export interface ApplicationRow extends RowDataPacket {
   user_id: string;
   status: ApplicationStatus;
   reviewer_supervisor_id: number | null;
+  /** 当前占用名额的第一志愿导师（需求 2.1）；NULL=未占用或已释放 */
+  quota_supervisor_id: number | null;
   submitted_at: Date | null;
   status_changed_at: Date;
   return_reason: string | null;
@@ -97,6 +99,12 @@ export interface SupervisorRow extends RowDataPacket {
   thrust_code: string;
   dept_name_en: string;
   is_active: number | boolean;
+}
+
+/** 导师搜索返回的行：多带名额两列，用于前端展示/禁用 */
+export interface SupervisorWithQuotaRow extends SupervisorRow {
+  quota_capacity: number;
+  quota_used: number;
 }
 
 export interface SectionRow extends RowDataPacket {
