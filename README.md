@@ -6,7 +6,20 @@ summer-camp
 └── ui/       # Vue 3 + Vite 前端 SPA（登录 / 学生申请表 / Application Status / 管理端 / 导师端）
 ```
 
-接口说明见 [server/README.md](./server/README.md)（第 10 节是申请表模块 `/form`）。
+接口说明见 [server/README.md](./server/README.md)。
+
+## 目录
+
+- [重要提醒：申请表必须选择预设的两个 supervisor](#注意---在填写申请表的时候必须要选择预设的两个supervisor否则application-form的流程不能完成)
+- [用角色 Agent 构建系统（工作流）](#用角色-agent-构建系统工作流)
+- [演示模式](#演示模式)
+  - [模式一：后端跑 Docker 镜像 + 前端跑 Vite dev server（推荐）](#模式一推荐后端跑-docker-镜像--前端跑-vite-dev-server推荐)
+  - [模式二：前后端都用本地 npm 启动（需要自备 MySQL）](#模式二前后端都用本地-npm-启动需要自备-mysql)
+- [单元测试](#单元测试)
+- [POSTMAN Collections](#postman-collections)
+  - [通用前置](#通用前置)
+  - [一、Auth：注册与登录流程](#一auth注册与登录流程)
+  - [二、Form：申请表业务流程](#二form申请表业务流程)
 
 ## 注意 - 在填写申请表的时候必须要选择预设的两个supervisor,否则application form的流程不能完成
 
