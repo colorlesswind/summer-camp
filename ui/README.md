@@ -237,6 +237,31 @@ server {
 
 > 生产环境服务端会下发 `Secure` Cookie，必须通过 HTTPS 访问；同时把 `APP_ORIGIN`、`CORS_ORIGINS` 配成实际前端域名。
 
+## 单元测试
+
+用 [Vitest](https://vitest.dev/) + `@vue/test-utils`（jsdom）。测试不连后端：axios 用自定义 adapter 拦截，Pinia / Router 用内存实现，`matchMedia`、`scrollTo` 在 `test/setup.ts` 里兜底。
+
+```bash
+npm test          # vitest run（默认 node 环境，需要 DOM 的文件用 // @vitest-environment jsdom）
+npm run test:watch
+```
+
+| 目录 | 覆盖内容 |
+| --- | --- |
+| `test/utils/` | Cookie 读写、CSRF token 读取、登录后回跳路径清洗 |
+| `test/api/` | `http.ts` 的 CSRF 注入 / 401 单飞刷新 + 重放 / 会话失效回调、problem+json → `ApiError`、两个 API 客户端的请求形状 |
+| `test/stores/` | Pinia auth store：登录 / 登出 / `/user/me` 探测 / 角色判断 |
+| `test/router/` | 路由表（名称、路径、meta.roles）与导航守卫（未登录、角色不符、已登录访问登录页） |
+| `test/composables/` | `useCountdown`、`useMediaQuery`、`useSectionScrollSpy`（假时钟 / matchMedia 桩） |
+| `test/features/` | 表单值 hydrate / payload、字段分组、文案与状态映射、`useApplicationForm` 的 Save / Submit 流程 |
+| `test/components/` | 通用组件与申请表单组件的渲染、props、emit、禁用态 |
+
+约定：
+
+- `test/**` 不在 `vue-tsc -b` 的构建范围内，但保持类型干净（`npm run typecheck` 仍只检查 `src`）。
+- 组件测试优先断言**行为**（emit 的参数、可见文案、禁用状态），不做快照。
+- 需要 DOM 的文件第一行写 `// @vitest-environment jsdom`；纯逻辑保持 node 环境以提速。
+
 ## 约定与后续
 
 - Ant Design Vue 采用**按需注册**（见 `src/main.ts`）；新增页面用到新组件时在 `main.ts` 追加 `app.use(...)`。

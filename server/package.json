@@ -10,6 +10,9 @@
     "copy:sql": "node -e \"require('fs').cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\"",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:typecheck": "tsc -p tsconfig.test.json",
     "migrate": "tsx src/db/migrate.ts",
     "seed:accounts": "tsx src/bootstrap/seed-cli.ts",
     "seed:accounts:prod": "node dist/bootstrap/seed-cli.js",
@@ -39,7 +42,10 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.2",
     "@types/nodemailer": "^6.4.17",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^5.1.0"
   }
 }

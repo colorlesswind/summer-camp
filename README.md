@@ -95,6 +95,19 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+## 单元测试
+
+前后端各有一套 Vitest 单测，**跑测试不需要 MySQL / SMTP / 外网**（持久层与第三方调用都 mock，环境变量由测试固定注入）：
+
+```bash
+cd server && npm test              # 服务端：28 个文件 / 439 个用例（含 supertest 的 HTTP 集成用例）
+cd ui     && npm test              # 前端：utils / api / stores / router / composables / 组件
+
+cd server && npm run test:typecheck # 测试代码的类型检查（tsconfig.test.json）
+```
+
+细节见 [server/README.md 第 11 节](./server/README.md#11-单元测试) 与 [ui/README.md](./ui/README.md#单元测试)。
+
 ## POSTMAN Collections
 
 两个集合都内置了 **mock data**，导入后无需自己拼请求体就能一键建号、建表、跑通整条业务流程。

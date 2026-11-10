@@ -725,3 +725,40 @@ npx tsx scripts/smoke-form.ts
 - 学生验证码需手工填：执行「发送登录验证码」后，把控制台里的 `[DEV MAIL] 登录验证码 xxxxxx` 填到集合变量 `studentOtp`（第二次登录填 `studentOtp2`）。同邮箱 60 秒内重发会 429。
 - `POST /form/applications` 的 body 是一份**完整 mock**（43 个字段，含 publications / experiences 两个数组行），可直接复制到别处使用；其中 `supervisorFirstId: 366`（AMAT）与 `supervisorSecondId: 363`（MICS）来自 `005_seed_supervisors.sql`，换库时自行替换。
 
+---
+
+## 11. 单元测试
+
+测试用 [Vitest](https://vitest.dev/)，`supertest` 负责 HTTP 层。**不需要 MySQL / SMTP / 外网**：持久层与第三方调用全部 mock，环境变量由 `test/setup.ts` 固定注入（不读开发机的 `.env`）。
+
+```bash
+npm test              # 跑一遍全部测试（vitest run）
+npm run test:watch    # watch 模式
+npm run test:typecheck # 只做测试代码的类型检查
+```
+
+### 11.1 目录结构
+
+```text
+server/test/
+├── setup.ts                 # 测试用 env（NODE_ENV=test / 固定密钥 / 低 cost bcrypt）
+├── unit/
+│   ├── common/              # crypto（哈希/HMAC/常量时间比较）、errors、validate、http
+│   ├── db/                  # mysql-errors（ER_DUP_ENTRY 判定）
+│   ├── infra/               # rate-limit.store（滑动窗口 + 回滚）、audit.log（失败不阻塞主流程）
+│   ├── middleware/          # authenticate / authorize / csrf / trusted-origin / error-handler
+│   ├── user/                # user.service（注册/登录/刷新/改密）、user.schema
+│   │   ├── auth/            # token / password / otp / session / cookies
+│   │   └── oauth/           # oauth.service（账号映射规则）、providers/github
+│   └── form/                # 状态机、表单校验、展示文案、zod schema、配置编译、form.service
+└── integration/
+    └── app.test.ts          # 用完整 Express app 验证：健康检查、404、CORS、Origin、CSRF、入参校验
+```
+
+### 11.2 约定
+
+- `@src/*` 是 `test/` 里指向 `src/` 的别名（见 `vitest.config.ts`），测试文件统一用它 import。
+- 依赖注入靠 `vi.mock('@src/...')`：mock 的是**模块**，所以 service 里的 repository 调用可以直接断言参数（例如 `expect(repo.insertLog).toHaveBeenCalledWith(conn, ...)`）。
+- 有状态的模块级缓存（如 `formConfigService` 的 30 秒缓存）要在 `beforeEach` 里 `invalidate()`，否则用例之间会串。
+- 时间相关逻辑用固定日期或 `vi.useFakeTimers()`，断言里不要依赖 `Date.now()` 的具体值。
+
