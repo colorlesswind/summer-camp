@@ -1,3 +1,4 @@
+import type { PoolConnection } from 'mysql2/promise';
 import { assertSubmissionWindowOpen } from './application.state';
 import { conflict } from '../common/errors';
 import { formConfigRepository } from './form.config.repository';
@@ -202,8 +203,10 @@ export const formConfigService = {
   },
 
   /** 当前提交窗口状态：开放中返回当前窗口，否则返回下一个即将开放的窗口 */
-  async getWindowState(now: Date): Promise<SubmissionWindowState> {
-    const windows = await formConfigRepository.listOpenWindows(now);
+  async getWindowState(now: Date, conn?: PoolConnection): Promise<SubmissionWindowState> {
+    const windows = conn
+      ? await formConfigRepository.listOpenWindows(now, conn)
+      : await formConfigRepository.listOpenWindows(now);
     const current = windows.find((row) => now >= row.opens_at && now <= row.closes_at);
     const upcoming = windows.find((row) => row.opens_at > now);
     const target = current ?? upcoming ?? null;
@@ -219,22 +222,31 @@ export const formConfigService = {
    * Draft 草稿是否还能保存。
    * 规则（笔试题 2.1）：提交开始前可提前保存；提交时段内可保存；时段结束（且窗口都过期）后不可保存。
    */
-  async isSaveAllowed(now: Date): Promise<boolean> {
-    const windows = await formConfigRepository.listOpenWindows(now);
+  async isSaveAllowed(now: Date, conn?: PoolConnection): Promise<boolean> {
+    const windows = conn
+      ? await formConfigRepository.listOpenWindows(now, conn)
+      : await formConfigRepository.listOpenWindows(now);
     if (windows.length > 0) return true;
     // 一个窗口都没配过 -> 视为不限制，避免本地开发被卡死
-    return (await formConfigRepository.countAllWindows()) === 0;
+    return (conn ? await formConfigRepository.countAllWindows(conn) : await formConfigRepository.countAllWindows()) === 0;
   },
 
-  async assertSaveAllowed(now: Date): Promise<void> {
-    if (await this.isSaveAllowed(now)) return;
+  async assertSaveAllowed(now: Date, conn?: PoolConnection): Promise<void> {
+    if (await this.isSaveAllowed(now, conn)) return;
     throw conflict('申请提交时段已结束，无法继续保存', { code: 'submission_window_closed' });
   },
 
   /** Submit 专用：窗口外直接 409（Resubmit 不调用） */
-  async assertSubmitAllowed(now: Date): Promise<void> {
-    const windows = await formConfigRepository.listOpenWindows(now);
-    if (windows.length === 0 && (await formConfigRepository.countAllWindows()) === 0) return;
+  async assertSubmitAllowed(now: Date, conn?: PoolConnection): Promise<void> {
+    const windows = conn
+      ? await formConfigRepository.listOpenWindows(now, conn)
+      : await formConfigRepository.listOpenWindows(now);
+    if (windows.length === 0) {
+      const total = conn
+        ? await formConfigRepository.countAllWindows(conn)
+        : await formConfigRepository.countAllWindows();
+      if (total === 0) return;
+    }
 
     assertSubmissionWindowOpen(
       now,

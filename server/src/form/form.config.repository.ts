@@ -1,3 +1,4 @@
+import type { PoolConnection } from 'mysql2/promise';
 import { pool } from '../db/pool';
 import type {
   ExamRow,
@@ -72,23 +73,24 @@ export const formConfigRepository = {
     return rows;
   },
 
-  /** 取仍然有效的提交窗口（已结束的不返回） */
-  async listOpenWindows(now: Date): Promise<SubmissionWindowRow[]> {
-    const [rows] = await pool.execute<SubmissionWindowRow[]>(
-      `SELECT id, label, opens_at, closes_at
-         FROM submission_windows
-        WHERE is_active = TRUE AND closes_at >= ?
-        ORDER BY opens_at`,
-      [now],
-    );
+  /** 取仍然有效的提交窗口（已结束的不返回）。传 conn 时复用调用方事务 */
+  async listOpenWindows(now: Date, conn?: PoolConnection): Promise<SubmissionWindowRow[]> {
+    const sql = `SELECT id, label, opens_at, closes_at
+                   FROM submission_windows
+                  WHERE is_active = TRUE AND closes_at >= ?
+                  ORDER BY opens_at`;
+    const [rows] = conn
+      ? await conn.execute<SubmissionWindowRow[]>(sql, [now])
+      : await pool.execute<SubmissionWindowRow[]>(sql, [now]);
     return rows;
   },
 
   /** 窗口总数：为 0 表示运维还没配，此时不限制保存/提交 */
-  async countAllWindows(): Promise<number> {
-    const [rows] = await pool.execute<Array<{ total: number } & import('mysql2/promise').RowDataPacket>>(
-      'SELECT COUNT(*) AS total FROM submission_windows',
-    );
+  async countAllWindows(conn?: PoolConnection): Promise<number> {
+    const sql = 'SELECT COUNT(*) AS total FROM submission_windows';
+    const [rows] = conn
+      ? await conn.execute<Array<{ total: number } & import('mysql2/promise').RowDataPacket>>(sql)
+      : await pool.execute<Array<{ total: number } & import('mysql2/promise').RowDataPacket>>(sql);
     return Number(rows[0]?.total ?? 0);
   },
 };

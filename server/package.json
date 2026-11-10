@@ -16,7 +16,8 @@
     "migrate": "tsx src/db/migrate.ts",
     "seed:accounts": "tsx src/bootstrap/seed-cli.ts",
     "seed:accounts:prod": "node dist/bootstrap/seed-cli.js",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:quota": "tsx scripts/smoke-quota.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

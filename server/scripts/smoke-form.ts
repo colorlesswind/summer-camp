@@ -336,7 +336,7 @@ async function main(): Promise<void> {
   });
   check('OfferAccepted 后 Decline -> 409', declineAfterAccept.status === 409, declineAfterAccept.body);
 
-  // ---------- Return / Need Update 分支 ----------
+  // ---------- Return / Pending for Update 分支 ----------
   const created2 = await student2.call('/form/applications', {
     method: 'POST',
     csrf: true,
@@ -355,7 +355,7 @@ async function main(): Promise<void> {
   });
   const mine2 = await student2.call('/form/applications/mine');
   check('GET /form/applications/mine 返回本人申请', mine2.body?.data?.id === applicationId2);
-  check('学生端 displayStatus=Need Update', mine2.body?.data?.displayStatus === 'Need Update');
+  check('学生端 displayStatus=Pending for Update', mine2.body?.data?.displayStatus === 'Pending for Update');
   check('Returned 状态可编辑', mine2.body?.data?.editable === true);
   check('actions 含 resubmit', (mine2.body?.data?.actions ?? []).includes('resubmit'));
 

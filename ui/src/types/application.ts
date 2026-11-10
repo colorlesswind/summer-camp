@@ -153,6 +153,9 @@ export interface SupervisorOption {
   userEmpId: string;
   thrustCode: string;
   deptNameEn: string;
+  /** 剩余名额（需求 2.1）；旧服务端未返回时视为不限 */
+  remaining?: number;
+  isFull?: boolean;
 }
 
 /** 批量 Send Offer 的失败明细（与 server form.service.ts 对齐） */

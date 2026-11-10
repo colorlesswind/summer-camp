@@ -6,6 +6,7 @@ import { APPLICATION_MESSAGES } from '../messages';
 interface SelectOption {
   label: string;
   value: number;
+  disabled?: boolean;
 }
 
 const props = withDefaults(
@@ -54,7 +55,18 @@ async function fetchOptions(keyword = ''): Promise<void> {
   try {
     const items = await applicationApi.searchSupervisors(programCode, keyword, 50);
     if (seq !== requestSeq) return;
-    options.value = items.map((item) => ({ label: item.name, value: item.id }));
+    options.value = items.map((item) => {
+      // 需求 2.1：名额已满的导师不可再被选择（后端 Submit 仍会兜底拒绝）
+      const full = item.isFull === true || item.remaining === 0;
+      if (full) {
+        return {
+          label: `${item.name} ${APPLICATION_MESSAGES.supervisorFull}`,
+          value: item.id,
+          disabled: true,
+        };
+      }
+      return { label: item.name, value: item.id };
+    });
   } catch {
     if (seq !== requestSeq) return;
     error.value = 'Unable to load supervisors. Try again.';

@@ -411,6 +411,20 @@ describe('SupervisorSelect', () => {
     ]);
   });
 
+  it('marks supervisors whose quota is full as disabled', async () => {
+    api.searchSupervisors.mockResolvedValue([
+      makeSupervisorOption({ id: 1, name: 'Prof. One', isFull: true, remaining: 0 }),
+      makeSupervisorOption({ id: 2, name: 'Prof. Two', isFull: false, remaining: 3 }),
+    ]);
+    const wrapper = mountSelect({ programCode: 'P1' });
+    await flushPromises();
+
+    expect(wrapper.findComponent(ASelectStub).props('options')).toEqual([
+      { label: 'Prof. One (Full)', value: 1, disabled: true },
+      { label: 'Prof. Two', value: 2 },
+    ]);
+  });
+
   it('clears the selection when the excluded supervisor is selected', async () => {
     const wrapper = mountSelect({ programCode: 'P1', modelValue: 1 });
     await flushPromises();

@@ -676,7 +676,15 @@ Education / Awards / Supporting Documents / English Proficiency 按题目要求�
 
 返回 `successCount` / `failureCount` / `failures[]`，前端可据此提示「成功 8 条，失败 2 条及原因」。
 
-> 需求 2.1 的「报名名额」未实现：`supervisors.quota_capacity` / `quota_used` 两列已预留，如需启用，在 `Submit` 事务里对导师行做 `UPDATE supervisors SET quota_used = quota_used + 1 WHERE id = ? AND quota_used < quota_capacity`，影响行数为 0 即名额已满。
+> **需求 2.1「报名名额」已实现**：
+> - 占位记录在 `applications.quota_supervisor_id`，计数器 `supervisors.quota_used` 只由原子更新维护：
+>   `UPDATE supervisors SET quota_used = quota_used + 1 WHERE id = ? AND quota_used < quota_capacity`，
+>   影响行数为 0 即名额已满（409 `quota_full`；前端把满额导师显示为 `(Full)` 并禁选）；
+> - `Submit` 占 1 个名额；`Resubmit` 导师未变不重复占用，换导师在同一事务内释放旧 + 占用新；
+>   `Supervisor Reject` / 学生 `Decline Offer` 释放；
+> - 名额用 `supervisors.quota_capacity` 配置（默认 50），迁移见 `src/db/migrations/006_supervisor_quota.sql`；
+> - 并发实现、锁顺序与约 500 并发 `Submit` 的处理方案见 [`docs/quota-design.md`](../docs/quota-design.md)，
+>   可执行 `npm run smoke:quota` 做并发冒烟。
 
 ### 10.10 导师账号绑定（否则导师端看不到任何申请）
 
