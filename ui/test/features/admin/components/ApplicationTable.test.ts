@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount, RouterLinkStub } from '@vue/test-utils';
+
+// 表格组件本身不直接用 antd，但它引入的 useAdminApplications 会 import { message }；
+// mock 掉可以避免为一次挂载加载整个 ant-design-vue。
+vi.mock('ant-design-vue', () => ({
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+}));
+
 import ApplicationTable from '@/features/admin/components/ApplicationTable.vue';
 import { STAFF_STATUS_META } from '@/constants/application';
 import { ADMIN_MESSAGES } from '@/features/admin/messages';
@@ -126,7 +133,10 @@ describe('ApplicationTable', () => {
     const firstRow = wrapper.findAll('tbody tr')[0];
     const buttons = firstRow.findAllComponents(AButtonStub);
 
-    expect(buttons.map((button) => button.text())).toEqual(['Approve', 'Return']);
+    expect(buttons.map((button: { text: () => string }) => button.text())).toEqual([
+      'Approve',
+      'Return',
+    ]);
 
     await buttons[0].trigger('click');
     await buttons[1].trigger('click');
@@ -140,7 +150,7 @@ describe('ApplicationTable', () => {
     const recommendedRow = wrapper.findAll('tbody tr')[1];
     const buttons = recommendedRow.findAllComponents(AButtonStub);
 
-    expect(buttons.map((button) => button.text())).toEqual(['Send Offer']);
+    expect(buttons.map((button: { text: () => string }) => button.text())).toEqual(['Send Offer']);
 
     await buttons[0].trigger('click');
 

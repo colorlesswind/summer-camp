@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils';
 import StatusHistoryTable from '@/features/staff/components/StatusHistoryTable.vue';
 import ApplicationFilterBar from '@/features/staff/components/ApplicationFilterBar.vue';
 import { STAFF_STATUS_OPTIONS } from '@/constants/application';
-import type { TimelineEntry } from '@/types/application';
+import type { ApplicationStatus, TimelineEntry } from '@/types/application';
 import type { FilterBarTexts } from '@/features/staff/types';
 import { AButtonStub, AInputStub, ASelectStub, antdStubs } from '../../../helpers/stubs';
 
@@ -110,7 +110,7 @@ describe('StatusHistoryTable', () => {
 describe('ApplicationFilterBar', () => {
   function mountBar(
     overrides: Partial<{
-      status: string | null;
+      status: ApplicationStatus | null;
       keyword: string;
       busy: boolean;
     }> = {},
@@ -123,7 +123,7 @@ describe('ApplicationFilterBar', () => {
         texts,
         busy: false,
         ...overrides,
-      } as never,
+      },
       global: { stubs: antdStubs },
       slots: { actions: '<button class="batch">Send Offer (2)</button>' },
     });

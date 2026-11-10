@@ -34,6 +34,7 @@ export const AInputStub = defineComponent({
 
 export const ATextareaStub = defineComponent({
   name: 'ATextareaStub',
+  inheritAttrs: false,
   props: {
     value: { type: [String, Number], default: '' },
     disabled: { type: Boolean, default: false },
@@ -54,6 +55,7 @@ export const ATextareaStub = defineComponent({
 
 export const AInputNumberStub = defineComponent({
   name: 'AInputNumberStub',
+  inheritAttrs: false,
   props: {
     value: { type: [Number, String], default: null },
     disabled: { type: Boolean, default: false },
@@ -73,6 +75,7 @@ export const AInputNumberStub = defineComponent({
 
 export const ASelectStub = defineComponent({
   name: 'ASelectStub',
+  inheritAttrs: false,
   props: {
     value: { type: [String, Number], default: undefined },
     options: { type: Array as () => unknown[], default: () => [] },
@@ -108,6 +111,7 @@ export const ASelectStub = defineComponent({
 
 export const ADatePickerStub = defineComponent({
   name: 'ADatePickerStub',
+  inheritAttrs: false,
   props: {
     value: { type: Object, default: null },
     disabled: { type: Boolean, default: false },
@@ -128,6 +132,7 @@ export const ADatePickerStub = defineComponent({
 
 export const ACheckboxStub = defineComponent({
   name: 'ACheckboxStub',
+  inheritAttrs: false,
   props: {
     checked: { type: Boolean, default: false },
     disabled: { type: Boolean, default: false },
@@ -152,6 +157,7 @@ export const ACheckboxStub = defineComponent({
 
 export const AButtonStub = defineComponent({
   name: 'AButtonStub',
+  inheritAttrs: false,
   props: {
     disabled: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
