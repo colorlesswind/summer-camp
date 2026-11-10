@@ -84,12 +84,15 @@ services:
     environment:
       # environment 优先级高于 env_file，用容器内可用的值覆盖宿主值
       <<: *db-env
-      NODE_ENV: ${NODE_ENV:-production}
+      # 便于demo,将NODE_ENV设置为development,生产环境需更换为production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: "3000"
       # 浏览器实际访问的地址；换域名/端口时改这里（或写进项目根目录的 .env）
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1}
+      # 便于demo,在docker image build时候的默认读取.env里面的下面的value,生产时候可能采用不同的云厂商,所以在手动注入的时候打开下面的选项
+      # 打开后会覆盖掉.env里面的配置
+      # APP_ORIGIN: ${APP_ORIGIN:-http://localhost}
+      # PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      # CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1}
     ports:
       - "${SERVER_PORT:-3000}:3000"
     depends_on:
