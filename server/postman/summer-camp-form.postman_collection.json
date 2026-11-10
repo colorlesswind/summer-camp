@@ -1,0 +1,1700 @@
+{
+  "info": {
+    "name": "Summer Camp · Application Form (/form)",
+    "description": "申请表模块（`/form`）的接口集合，覆盖 18 个端点。\n\n【使用前】\n1. 启动服务：`cd server && npm run dev`\n2. 执行迁移（含 004 参考数据、005 导师名单）：`npm run migrate`\n3. 确认集合变量 `baseUrl`（默认 http://localhost:3000）\n4. Postman 保持 Cookie 自动管理（默认开启）\n\n【账号】\n- 学生：邮箱 + 验证码登录，首次登录自动开户；邮箱由集合自动生成\n- 管理员：`{{adminEmail}}` / `{{adminPassword}}`，来自 `.env` 的 `BOOTSTRAP_ADMIN_*`\n- 导师：`{{supervisorEmail}}` / `{{supervisorPassword}}`，必须已绑定导师档案（`supervisors.user_id`），默认绑到 366（Blake WANG，AMAT）\n\n【唯一需要手动的一步】\n学生验证码只通过邮件/控制台下发。执行「发送登录验证码」后，到服务端控制台找 `[DEV MAIL] 登录验证码 xxxxxx`，填进集合变量 `studentOtp`（第 2 次登录填 `studentOtp2`）。\n\n【执行顺序】\n00 → 01 → 02 → 03 → 04 → 05 为 happy path，可以按文件夹顺序 Run。\n注意：Cookie 是同一个域共享的，所以每个文件夹开头都重新登录一次（切角色）。\n90 是负向/可选分支，按需单独点击。\n\n【CSRF】\n所有写操作需要 `X-CSRF-Token`，集合级 pre-request 会自动从变量或 `sc_csrf` Cookie 注入。\n\n【Save 语义】\n`PUT /form/applications/:id` 不校验必填；**提供的 key 覆盖，未提供的保留原值**。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 1) 首次运行自动生成唯一学生邮箱（学生用 OTP 登录，首次登录自动开户）",
+          "if (!pm.collectionVariables.get('studentEmail')) {",
+          "  pm.collectionVariables.set('studentEmail', 'postman_form_' + Date.now() + '@example.com');",
+          "}",
+          "",
+          "// 2) 自动注入 CSRF Token（双提交：Cookie 里的值必须与请求头一致）",
+          "let csrf = pm.collectionVariables.get('csrfToken');",
+          "if (!csrf) {",
+          "  const fromCookie = pm.cookies.get('sc_csrf');",
+          "  if (fromCookie) csrf = fromCookie;",
+          "}",
+          "if (csrf) {",
+          "  pm.request.headers.upsert({ key: 'X-CSRF-Token', value: csrf });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "studentEmail",
+      "value": ""
+    },
+    {
+      "key": "studentOtp",
+      "value": ""
+    },
+    {
+      "key": "studentOtp2",
+      "value": ""
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@example.com"
+    },
+    {
+      "key": "adminPassword",
+      "value": "1234567890123456"
+    },
+    {
+      "key": "supervisorEmail",
+      "value": "supervisor1@example.com"
+    },
+    {
+      "key": "supervisorPassword",
+      "value": "1234567890123456"
+    },
+    {
+      "key": "applicationId",
+      "value": ""
+    },
+    {
+      "key": "applicationNumber",
+      "value": ""
+    },
+    {
+      "key": "csrfToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "00 · 前置 / 重置",
+      "description": "整体 Run 之前先执行一次「重置测试变量」，让下一次请求生成新的学生邮箱，避免撞上一条申请的 `application_exists`。",
+      "item": [
+        {
+          "name": "GET /healthz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且数据库可用', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "健康检查。返回 503 说明 MySQL 没连上。"
+          },
+          "response": []
+        },
+        {
+          "name": "重置测试变量",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('studentEmail', '');",
+                  "pm.collectionVariables.set('studentOtp', '');",
+                  "pm.collectionVariables.set('studentOtp2', '');",
+                  "pm.collectionVariables.set('applicationId', '');",
+                  "pm.collectionVariables.set('applicationNumber', '');",
+                  "pm.collectionVariables.set('csrfToken', '');",
+                  "pm.test('变量已重置（下次请求会生成新学生邮箱）', () => pm.expect(true).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "清空学生邮箱 / 申请 id / CSRF，让本次 Run 变成一段全新的申请。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/schema（表单配置）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('启用 6 个小节', () => pm.expect(data.sections.length).to.eql(6));",
+                  "pm.test('4 个 Program 选项', () => pm.expect(data.enums.programs.length).to.eql(4));",
+                  "pm.test('返回提交窗口状态', () => pm.expect(data.meta.submissionWindow).to.have.property('isOpen'));",
+                  "console.log('提交窗口：' + JSON.stringify(data.meta.submissionWindow));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/schema",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "schema"
+              ]
+            },
+            "description": "表单配置 + `meta.submissionWindow`。前端靠它渲染整页，并在窗口外禁用 Submit。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 · 学生：登录 → 建单 → 提交",
+      "description": "学生用邮箱验证码登录（首次登录自动开户）。\n\n⚠️ 唯一需要手动的一步：`POST /user/otp` 之后，服务端控制台会打印 `[DEV MAIL] 登录验证码 xxxxxx`，把 6 位数字填到集合变量 `studentOtp`，再执行登录。",
+      "item": [
+        {
+          "name": "发送登录验证码",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "console.log('邮箱：' + pm.collectionVariables.get('studentEmail') + ' —— 请到服务端控制台取验证码填入 studentOtp');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"purpose\": \"logon\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "otp"
+              ]
+            },
+            "description": "本地未配置 SMTP 时，验证码以 `[DEV MAIL] 登录验证码 123456` 的形式打印在服务端控制台。\n\n填到集合变量 `studentOtp`。同邮箱 60 秒内重复发送会 429。"
+          },
+          "response": []
+        },
+        {
+          "name": "学生登录（OTP）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且下发 Cookie', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "pm.test('返回 csrfToken（后续写操作自动带上）', () => pm.expect(body.csrfToken).to.be.a('string'));",
+                  "pm.test('角色为 student', () => pm.expect(body.user.role).to.eql('student'));",
+                  "console.log('学生：' + body.user.email);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"otp\",\n  \"email\": \"{{studentEmail}}\",\n  \"otp\": \"{{studentOtp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "logon"
+              ]
+            },
+            "description": "登录成功后 Cookie 由 Postman 自动保存，后续 /form 请求共享同一会话。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/supervisors（第一志愿候选）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data.items;",
+                  "pm.test('有候选导师', () => pm.expect(items.length).to.be.above(0));",
+                  "console.log('AMAT 候选（前 3 个）：' + items.slice(0, 3).map((x) => x.id + ' ' + x.name).join(' / '));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/supervisors?programCode=AMAT&keyword=Bl&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "supervisors"
+              ],
+              "query": [
+                {
+                  "key": "programCode",
+                  "value": "AMAT"
+                },
+                {
+                  "key": "keyword",
+                  "value": "Bl"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "按 Program 过滤 + 模糊搜索。返回的 `id` 就是 `supervisorFirstId` 要填的值。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/applications（完整 mock，首次 Save）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const app = pm.response.json().data;",
+                  "pm.collectionVariables.set('applicationId', app.id);",
+                  "pm.collectionVariables.set('applicationNumber', app.applicationNumber);",
+                  "pm.test('生成 11 位 Application No.', () => pm.expect(app.applicationNumber).to.match(/^\\d{11}$/));",
+                  "pm.test('初始状态 Draft', () => pm.expect(app.status).to.eql('Draft'));",
+                  "pm.test('可保存 / 可提交', () => {",
+                  "  pm.expect(app.editable).to.be.true;",
+                  "  pm.expect(app.actions).to.include('submit');",
+                  "});",
+                  "pm.test('values 已回填（含数组小节）', () => {",
+                  "  pm.expect(app.values.lastNameEn).to.eql('ZHANG');",
+                  "  pm.expect(app.values.publications.length).to.eql(2);",
+                  "  pm.expect(app.values.experiences.length).to.eql(2);",
+                  "  pm.expect(app.values.consentDeclaration).to.be.true;",
+                  "});",
+                  "console.log('Application No. = ' + app.applicationNumber + '（id=' + app.id + '）');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"lastNameEn\": \"ZHANG\",\n    \"firstNameEn\": \"San\",\n    \"fullNameZh\": \"张三\",\n    \"gender\": \"MALE\",\n    \"dateOfBirth\": \"2002-05-01\",\n    \"idDocumentType\": \"RESIDENT_ID\",\n    \"idDocumentNumber\": \"440101200205011234\",\n    \"needsStudentVisa\": true,\n    \"correspondenceAddress\": \"广东省广州市黄埔区红鸟路 1 号 香港科技大学（广州）\",\n    \"phoneCountryCode\": \"+86\",\n    \"phoneNumber\": \"13800138000\",\n    \"programFirstId\": \"AMAT\",\n    \"supervisorFirstId\": 366,\n    \"programSecondId\": \"MICS\",\n    \"supervisorSecondId\": 363,\n    \"proposedResearchAreas\": \"Solid-state electrolytes for all-solid-state lithium batteries\",\n    \"personalStatement\": \"I am a final-year undergraduate student majoring in Materials Science. During the past two years I have worked on sulfide solid electrolytes, focusing on the interface between the electrolyte and the lithium metal anode. I would like to join the Function Hub Summer Camp to strengthen my background in electrochemical characterisation and to discuss a possible PhD project on interfacial engineering of all-solid-state batteries.\",\n    \"publications\": [\n      {\n        \"pubTitle\": \"Interfacial engineering of sulfide solid electrolytes\",\n        \"pubVenue\": \"Journal of Materials Chemistry A\",\n        \"pubAuthors\": \"ZHANG San, LI Si, WANG Wu\",\n        \"pubPublishDate\": \"2024-06-01\",\n        \"pubStatus\": \"PUBLISHED\",\n        \"pubUrl\": \"https://doi.org/10.1039/example\"\n      },\n      {\n        \"pubTitle\": \"A low-temperature sintering route for garnet electrolytes\",\n        \"pubVenue\": \"Solid State Ionics (under review)\",\n        \"pubAuthors\": \"ZHANG San, CHEN Liu\",\n        \"pubPublishDate\": \"2025-01-15\",\n        \"pubStatus\": \"UNDER_REVIEW\",\n        \"pubUrl\": null\n      }\n    ],\n    \"experiences\": [\n      {\n        \"expType\": \"INTERNSHIP\",\n        \"expOrganization\": \"CATL Research Institute\",\n        \"expPosition\": \"Research Intern\",\n        \"expPeriodStart\": \"2023-07-01\",\n        \"expPeriodEnd\": \"2023-09-30\",\n        \"expResponsibilities\": \"Prepared sulfide electrolyte pellets and ran EIS measurements.\"\n      },\n      {\n        \"expType\": \"VOLUNTEER\",\n        \"expOrganization\": \"Rural Teaching Support Programme\",\n        \"expPosition\": \"Volunteer Teacher\",\n        \"expPeriodStart\": \"2022-07-01\",\n        \"expPeriodEnd\": \"2022-08-15\",\n        \"expResponsibilities\": \"Taught physics to 60 middle-school students.\"\n      }\n    ],\n    \"consentDeclaration\": true,\n    \"consentMedia\": false\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ]
+            },
+            "description": "**完整 mock**：覆盖 Personal Particulars / Program Choice / Personal Statement / Publications / Work Experience / Statement 六个小节的全部 31 个可写字段（`email` 是 readonly 派生字段，不需要提交）。\n\n说明：\n- 首次 Save 不做必填校验，残缺也能存；但类型 / 长度 / 选项 / 联动 / 跨字段会校验。\n- `supervisorFirstId: 366`（Blake WANG，AMAT）与 `supervisorSecondId: 363`（Felix DONG，MICS）来自 `005_seed_supervisors.sql`；如果换了库，先用上面那个 `/form/supervisors` 请求查真实 id。\n- 导师必须属于所选 Program，否则 400 `supervisor_program_mismatch`。\n- 两个志愿不能是同一个 Program、也不能是同一位导师（由数据库唯一键兜底）。\n\n成功返回 201，并生成 11 位 Application No.（如 `26000000001`）。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications/mine",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且是本人在建的申请', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('applicationId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/mine",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "mine"
+              ]
+            },
+            "description": "学生端落地页：返回「我那一份」，没有则 `data: null`。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications/{{applicationId}}（详情）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('Draft 可编辑', () => pm.expect(data.editable).to.be.true);",
+                  "pm.test('actions 含 save / submit', () => {",
+                  "  pm.expect(data.actions).to.include('save');",
+                  "  pm.expect(data.actions).to.include('submit');",
+                  "});",
+                  "pm.test('timeline 首条是首次保存', () => pm.expect(data.timeline[0].action).to.eql('save'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "详情返回 `values`（key = form_fields.code）+ 服务端算好的 `actions` + `timeline`。"
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /form/applications/{{applicationId}}（局部 Save）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const values = pm.response.json().data.values;",
+                  "pm.test('新值已写入', () => pm.expect(values.phoneNumber).to.eql('13900139000'));",
+                  "pm.test('未提交的字段保持不变', () => pm.expect(values.lastNameEn).to.eql('ZHANG'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"phoneNumber\": \"13900139000\",\n    \"correspondenceAddress\": \"北京市海淀区中关村大街 1 号\",\n    \"proposedResearchAreas\": \"Solid-state electrolytes; interface engineering\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "Save 语义：**提供的 key 覆盖，未提供的保留原值**，所以这里只传 3 个字段。\n不校验必填，但会校验类型 / 长度 / 选项；未知 key 直接 400 `unknown_field`。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/applications/{{applicationId}}/submit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且进入 PendingForPreliminaryScreening', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.status).to.eql('PendingForPreliminaryScreening');",
+                  "});",
+                  "pm.test('学生端 displayStatus = Under Review', () => {",
+                  "  pm.expect(pm.response.json().data.displayStatus).to.eql('Under Review');",
+                  "});",
+                  "pm.test('提交后不可再保存', () => pm.expect(pm.response.json().data.editable).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "submit"
+              ]
+            },
+            "description": "Submit 校验的是**库里已保存的内容**：必填来自 `form_fields.is_required`，并受 `submission_windows` 约束（窗口外 409 `submission_window_closed`）。\n\n校验失败返回 400 `validation_failed`，`errors[]` 里逐字段给出原因。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications（学生列表）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('只有本人一份申请', () => pm.expect(data.items.length).to.eql(1));",
+                  "pm.test('列表字段齐全', () => {",
+                  "  const item = data.items[0];",
+                  "  pm.expect(item.applicationNumber).to.eql(pm.collectionVariables.get('applicationNumber'));",
+                  "  pm.expect(item.nameEn).to.eql('ZHANG, San');",
+                  "  pm.expect(item.firstProgramCode).to.eql('AMAT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications?page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "学生端只会返回自己那一份（同一邮箱仅一份申请）。列表不带 Due Date、不折叠。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications/{{applicationId}}/history",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('有流转记录', () => pm.expect(pm.response.json().data.timeline.length).to.be.above(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "history"
+              ]
+            },
+            "description": "状态流转时间线（谁、什么动作、从哪到哪、备注）。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 · 管理员：初筛 Approve",
+      "description": "管理员用预置账号密码登录。初始账号来自 `.env` 的 `BOOTSTRAP_ADMIN_*`。",
+      "item": [
+        {
+          "name": "管理员登录",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedRole', 'admin');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且下发 Cookie', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "pm.test('返回 csrfToken', () => pm.expect(body.csrfToken).to.be.a('string'));",
+                  "pm.test('角色符合预期', () => pm.expect(body.user.role).to.eql(pm.variables.get('expectedRole')));",
+                  "console.log('登录账号：' + body.user.email + '（' + body.user.role + '）');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"password\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "logon"
+              ]
+            },
+            "description": "密码登录。若 401，检查 `.env` 里的 `BOOTSTRAP_ADMIN_EMAIL / PASSWORD` 是否与集合变量一致。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications?status=PendingForPreliminaryScreening",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data.items;",
+                  "pm.test('列表里能找到刚提交的申请', () => {",
+                  "  pm.expect(items.map((x) => x.id)).to.include(pm.collectionVariables.get('applicationId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications?status=PendingForPreliminaryScreening&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PendingForPreliminaryScreening"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "管理员列表支持按 status 过滤，也支持 `keyword`（编号 / 姓名 / 邮箱）搜索，多个 status 用逗号分隔。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/applications/{{applicationId}}/approve",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且进入 PendingSupervisorReview', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.status).to.eql('PendingSupervisorReview');",
+                  "});",
+                  "pm.test('管理端 displayStatus', () => {",
+                  "  pm.expect(pm.response.json().data.displayStatus).to.eql('Pending Supervisor Review');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "approve"
+              ]
+            },
+            "description": "初筛通过：`PendingForPreliminaryScreening` → `PendingSupervisorReview`，此后导师端才可见。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 · 导师：评审 Recommend",
+      "description": "导师账号必须已绑定导师档案（`supervisors.user_id`），否则 403 `supervisor_not_registered`。\n本机已把 `supervisor1@example.com` 绑到 366（Blake WANG，AMAT），它是该申请的 First Choice 导师。",
+      "item": [
+        {
+          "name": "导师登录（supervisor1）",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedRole', 'supervisor');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且下发 Cookie', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "pm.test('返回 csrfToken', () => pm.expect(body.csrfToken).to.be.a('string'));",
+                  "pm.test('角色符合预期', () => pm.expect(body.user.role).to.eql(pm.variables.get('expectedRole')));",
+                  "console.log('登录账号：' + body.user.email + '（' + body.user.role + '）');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"password\",\n  \"email\": \"{{supervisorEmail}}\",\n  \"password\": \"{{supervisorPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "logon"
+              ]
+            },
+            "description": "密码登录。登录后 `/form/applications` 只会返回分配给自己的申请。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications（导师列表）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data.items;",
+                  "pm.test('能看到分配给自己的申请', () => {",
+                  "  pm.expect(items.map((x) => x.id)).to.include(pm.collectionVariables.get('applicationId'));",
+                  "});",
+                  "pm.test('状态都在导师可见范围内', () => pm.expect(items.every((x) => x.status !== 'Draft')).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ]
+            },
+            "description": "导师端强制 `reviewer_supervisor_id = 自己` 且 `status` 在 PendingSupervisorReview 及之后。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications/{{applicationId}}（导师视角详情）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('导师不可编辑', () => pm.expect(data.editable).to.be.false);",
+                  "pm.test('actions 含 recommend / reject', () => {",
+                  "  pm.expect(data.actions).to.include('recommend');",
+                  "  pm.expect(data.actions).to.include('reject');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "导师看到的是只读详情；`actions` 只包含 recommend / reject。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/applications/{{applicationId}}/recommend",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且进入 SupervisorRecommended', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.status).to.eql('SupervisorRecommended');",
+                  "});",
+                  "pm.test('导师端 displayStatus', () => {",
+                  "  pm.expect(pm.response.json().data.displayStatus).to.eql('Supervisor Recommended');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Background matches the thrust.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/recommend",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "recommend"
+              ]
+            },
+            "description": "`PendingSupervisorReview` → `SupervisorRecommended`。`reason` 可选，写进状态审计备注。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 · 管理员：批量 Send Offer",
+      "description": "批量接口只处理当前状态符合要求的申请，返回成功/失败数量与原因；每条一个独立事务 + 子流程，单条超过 3s 记为失败（需求 2.2）。",
+      "item": [
+        {
+          "name": "管理员登录",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('expectedRole', 'admin');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且下发 Cookie', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "pm.test('返回 csrfToken', () => pm.expect(body.csrfToken).to.be.a('string'));",
+                  "pm.test('角色符合预期', () => pm.expect(body.user.role).to.eql(pm.variables.get('expectedRole')));",
+                  "console.log('登录账号：' + body.user.email + '（' + body.user.role + '）');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"password\",\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "logon"
+              ]
+            },
+            "description": "重新登录以拿回管理员 Cookie（Cookie 是同一个域名下的，前面的导师登录已经把它覆盖了）。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/offers/batch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('成功 1 条、失败 0 条', () => {",
+                  "  pm.expect(data.successCount).to.eql(1);",
+                  "  pm.expect(data.failureCount).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\n    \"{{applicationId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/offers/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "offers",
+                "batch"
+              ]
+            },
+            "description": "`SupervisorRecommended` → `OfferSent`。\n\n返回 `{ total, successCount, failureCount, failures[] }`；失败项带 `code`（`invalid_transition` / `timeout` 等）方便前端逐条提示。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications?status=OfferSent",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且列表里有这条申请', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const items = pm.response.json().data.items;",
+                  "  pm.expect(items.map((x) => x.id)).to.include(pm.collectionVariables.get('applicationId'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications?status=OfferSent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OfferSent"
+                }
+              ]
+            },
+            "description": "确认状态已变为 OfferSent。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 · 学生：接受 Offer",
+      "description": "学生需要重新登录（Cookie 已被管理员登录覆盖）。\n\n⚠️ 若上一次发验证码不到 60 秒，会返回 429；等 60 秒重发，把新码填到 `studentOtp2`。\n验证码也可以先在 01 里不消费，直接把同一个码填到 `studentOtp2`（10 分钟内有效、单次使用）。",
+      "item": [
+        {
+          "name": "发送登录验证码（第 2 次）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 或 429（60 秒冷却）', () => pm.expect(pm.response.code).to.be.oneOf([202, 429]));",
+                  "if (pm.response.code === 429) {",
+                  "  console.warn('验证码 60 秒冷却中：等 60 秒再点一次，或复用 01 里没消费过的验证码');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{studentEmail}}\",\n  \"purpose\": \"logon\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "otp"
+              ]
+            },
+            "description": "把服务端控制台里的验证码填到 `studentOtp2`。"
+          },
+          "response": []
+        },
+        {
+          "name": "学生登录（OTP 第 2 次）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且下发 Cookie', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "pm.test('返回 csrfToken（后续写操作自动带上）', () => pm.expect(body.csrfToken).to.be.a('string'));",
+                  "pm.test('角色为 student', () => pm.expect(body.user.role).to.eql('student'));",
+                  "console.log('学生：' + body.user.email);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"otp\",\n  \"email\": \"{{studentEmail}}\",\n  \"otp\": \"{{studentOtp2}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "logon"
+              ]
+            },
+            "description": "拿回学生会话。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications（学生端看 Offer）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const item = pm.response.json().data.items[0];",
+                  "pm.test('学生端 displayStatus = Pending for Offer Acceptance', () => {",
+                  "  pm.expect(item.displayStatus).to.eql('Pending for Offer Acceptance');",
+                  "});",
+                  "pm.test('status 仍是 OfferSent', () => pm.expect(item.status).to.eql('OfferSent'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications"
+              ]
+            },
+            "description": "学生端 `displayStatus` 此时应为 `Pending for Offer Acceptance`。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /form/applications/{{applicationId}}（拿 Offer 前的 actions）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const actions = pm.response.json().data.actions;",
+                  "pm.test('actions 含 accept_offer / decline_offer', () => {",
+                  "  pm.expect(actions).to.include('accept_offer');",
+                  "  pm.expect(actions).to.include('decline_offer');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "OfferSent 时 `actions` 应包含 accept_offer / decline_offer。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /form/applications/{{applicationId}}/accept-offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且进入 OfferAccepted', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.status).to.eql('OfferAccepted');",
+                  "});",
+                  "const data = pm.response.json().data;",
+                  "pm.test('终态只读、无可用动作', () => {",
+                  "  pm.expect(data.editable).to.be.false;",
+                  "  pm.expect(data.actions).to.have.lengthOf(0);",
+                  "});",
+                  "pm.test('学生端 displayStatus = Offer Accepted', () => {",
+                  "  pm.expect(data.displayStatus).to.eql('Offer Accepted');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/accept-offer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "accept-offer"
+              ]
+            },
+            "description": "`OfferSent` → `OfferAccepted`（终态）。前端需二次确认。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "90 · 负向与可选分支（单独运行，勿整体 Run）",
+      "description": "这些请求都有前置状态要求，整体 Run 到这一步时申请通常已是终态，因此断言写成「期望状态 + 打印实际结果」。\n\n可以单独点某一根请求来验证：\n- 非法流转 → 409 `invalid_transition`\n- 缺 CSRF → 403 `csrf_token_invalid`\n- 未知字段 → 400 `validation_failed`（`code: unknown_field`）\n- 退回 / 重提 / 拒绝 Offer / 单条 Send Offer 需要一条对应状态的申请",
+      "item": [
+        {
+          "name": "重复 Submit → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 invalid_transition', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().code).to.eql('invalid_transition');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "submit"
+              ]
+            },
+            "description": "状态已不是 Draft，`assertCan` 拦截：409 `invalid_transition`，`details.allowedFrom` 给出允许的起始状态。"
+          },
+          "response": []
+        },
+        {
+          "name": "未知字段 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 或 409', () => pm.expect(pm.response.code).to.be.oneOf([400, 409]));",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"values\": {\n    \"notARealField\": \"x\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "`unknown_field`。注意：只有处于 `Draft` / `Returned` 时才会走到字段校验；其他状态会先被 409 `invalid_transition` 拦住。"
+          },
+          "response": []
+        },
+        {
+          "name": "缺 CSRF Token → 403",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.request.headers.remove('X-CSRF-Token');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 csrf_token_invalid', () => {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().code).to.eql('csrf_token_invalid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "submit"
+              ]
+            },
+            "description": "双提交校验：请求头 `X-CSRF-Token` 必须等于 `sc_csrf` Cookie。本请求在 pre-request 里主动删掉了这个头。"
+          },
+          "response": []
+        },
+        {
+          "name": "管理员退回 → Returned",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 或 409（状态不符）', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "if (pm.response.code === 200) { pm.expect(pm.response.json().data.status).to.eql('Returned'); }",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"成绩单不清晰，请重新上传并补充排名证明。\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/return",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "return"
+              ]
+            },
+            "description": "只在 `PendingForPreliminaryScreening` 可用。执行后学生端 `displayStatus` 变成 **Need Update**，且 `editable = true`，可以继续改并 Resubmit（不受提交窗口限制）。\n\n需要管理员 Cookie —— 若当前是学生会话，先跑 02 里的管理员登录。"
+          },
+          "response": []
+        },
+        {
+          "name": "学生 Resubmit（Returned → 重新提交）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 或 409（状态不符）', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/resubmit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "resubmit"
+              ]
+            },
+            "description": "只在 `Returned` 可用；不受提交窗口限制，走与 Submit 相同的必填校验。需要学生 Cookie。"
+          },
+          "response": []
+        },
+        {
+          "name": "导师 Reject（拒绝，终态）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 或 409（状态不符）', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "if (pm.response.code === 200) { pm.expect(pm.response.json().data.status).to.eql('SupervisorRejected'); }",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Research interests do not match this thrust.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "reject"
+              ]
+            },
+            "description": "只在 `PendingSupervisorReview` 可用：`PendingSupervisorReview` → `SupervisorRejected`（终态）。\n\n需要该申请的 First Choice 导师 Cookie；非分配导师会拿到 404。"
+          },
+          "response": []
+        },
+        {
+          "name": "管理员单条 Send Offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 或 409（状态不符）', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/send-offer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "send-offer"
+              ]
+            },
+            "description": "只在 `SupervisorRecommended` 可用；批量接口见 04。"
+          },
+          "response": []
+        },
+        {
+          "name": "学生 Decline Offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 或 409（状态不符）', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}/decline-offer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}",
+                "decline-offer"
+              ]
+            },
+            "description": "只在 `OfferSent` 可用；要在 05 的 accept-offer 之前执行。"
+          },
+          "response": []
+        },
+        {
+          "name": "非分配导师越权查看 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 或 403（账号未绑定档案）', () => pm.expect(pm.response.code).to.be.oneOf([404, 403]));",
+                  "console.log('实际 code = ' + pm.response.json().code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/form/applications/{{applicationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "form",
+                "applications",
+                "{{applicationId}}"
+              ]
+            },
+            "description": "`supervisor2`（Uma ZHENG，EOAS）不是该申请的 First Choice 导师，返回 404 而不是 403，避免探测申请是否存在。需要先跑 03 里的 `supervisor2` 登录（把 supervisorEmail 换成 `supervisor2@example.com`）。"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

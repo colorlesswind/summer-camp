@@ -1,0 +1,38 @@
+.login-form {
+  width: 100%;
+}
+
+.login-form .ant-form-item {
+  margin-bottom: 20px;
+}
+
+.login-form__inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.login-form__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.login-form__send {
+  flex: 0 0 auto;
+  padding-inline: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .login-form__inline {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .login-form__send {
+    width: 100%;
+  }
+}

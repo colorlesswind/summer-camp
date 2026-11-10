@@ -1,0 +1,543 @@
+{
+  "info": {
+    "name": "Summer Camp · Auth Happy Flow",
+    "description": "认证模块 happy flow 集合。\n\n【使用前】\n1. 确认服务已启动：cd server && npm run dev\n2. 确认 baseUrl 变量指向后端地址（默认 http://localhost:3000）\n3. Postman 需开启 Cookie 自动管理（默认开启）：Settings → General → Automatically follow redirects / Cookie jar 保持默认即可\n\n【唯一需要手动的一步】\n验证码只通过邮件下发（本地未配置 SMTP 时会打印在服务端控制台）：\n  控制台出现 `[DEV MAIL] 验证邮箱验证码 123456`\n  把 6 位数字填到集合变量 verifyCode（或直接改请求体）\n同理，二次登录时把 `[DEV MAIL] 登录验证码 xxxxxx` 填到 logonCode。\n\n【执行顺序】\n00 → 01 → 02，按文件夹顺序点击 Run 即可。\n每次重跑前先执行 00 里的「重置测试变量」，否则会复用上一次的邮箱。\n\n【CSRF】\nrefresh / logout / password-change 需要请求头 X-CSRF-Token，集合级 pre-request 脚本会自动从变量或 sc_csrf Cookie 里取值并注入，无需手工设置。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 1) 首次运行自动生成唯一邮箱，避免与历史数据冲突",
+          "if (!pm.collectionVariables.get('email')) {",
+          "  pm.collectionVariables.set('email', 'postman_' + Date.now() + '@example.com');",
+          "}",
+          "if (!pm.collectionVariables.get('otpEmail')) {",
+          "  pm.collectionVariables.set('otpEmail', 'postman_otp_' + Date.now() + '@example.com');",
+          "}",
+          "",
+          "// 2) 自动注入 CSRF Token（双提交：Cookie 里的值必须与请求头一致）",
+          "let csrf = pm.collectionVariables.get('csrfToken');",
+          "if (!csrf) {",
+          "  const fromCookie = pm.cookies.get('sc_csrf');",
+          "  if (fromCookie) csrf = fromCookie;",
+          "}",
+          "if (csrf) {",
+          "  pm.request.headers.upsert({ key: 'X-CSRF-Token', value: csrf });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "email", "value": "" },
+    { "key": "otpEmail", "value": "" },
+    { "key": "password", "value": "Passw0rd!2024" },
+    { "key": "newPassword", "value": "Passw0rd!2025" },
+    { "key": "verifyCode", "value": "" },
+    { "key": "logonCode", "value": "" },
+    { "key": "csrfToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 · 前置 / 重置",
+      "description": "重跑整个集合前，先执行「重置测试变量」。",
+      "item": [
+        {
+          "name": "重置测试变量",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('email', '');",
+                  "pm.collectionVariables.set('otpEmail', '');",
+                  "pm.collectionVariables.set('verifyCode', '');",
+                  "pm.collectionVariables.set('logonCode', '');",
+                  "pm.collectionVariables.set('csrfToken', '');",
+                  "pm.test('变量已重置（下次请求会生成新邮箱）', () => pm.expect(true).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            },
+            "description": "清空 email / otpEmail / 验证码 / csrfToken，让下一次请求重新生成唯一邮箱。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /healthz",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且数据库可用', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('ok');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            },
+            "description": "健康检查。返回 503 说明 MySQL 没连上。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 · 注册 → 验证邮箱 → 密码登录",
+      "description": "完整密码链路。注意：register 已经发过一次验证码，紧接着再调 /user/otp(purpose=verify_email) 会命中 60 秒冷却返回 429，所以这里不再调它。",
+      "item": [
+        {
+          "name": "POST /user/register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "const body = pm.response.json();",
+                  "pm.test('响应体不含任何 token', () => {",
+                  "  pm.expect(JSON.stringify(body)).to.not.include('accessToken');",
+                  "  pm.expect(JSON.stringify(body)).to.not.include('refreshToken');",
+                  "});",
+                  "console.log('注册邮箱：' + pm.collectionVariables.get('email') + ' —— 请到服务端控制台取验证码并填入 verifyCode 变量');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"displayName\": \"Postman User\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "register"]
+            },
+            "description": "注册新用户。无论邮箱是否已存在都返回 202（防枚举），新邮箱会建号并发送 verify_email 验证码。\n\n跑完后到服务端控制台找：\n`[DEV MAIL] 验证邮箱验证码 123456`"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/email/verify",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且邮箱已验证', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().verified).to.be.true;",
+                  "});",
+                  "if (pm.response.code === 401) {",
+                  "  console.warn('401 invalid_grant：verifyCode 为空、填错或已过期（10 分钟）');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"code\": \"{{verifyCode}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/email/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "email", "verify"]
+            },
+            "description": "把控制台里的 6 位验证码填到集合变量 verifyCode。\n\n未验证邮箱时直接登录会返回 403 email_unverified，这是预期行为。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/logon（password）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('返回 user 信息', () => {",
+                  "  pm.expect(body.user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "  pm.expect(body.user.emailVerified).to.be.true;",
+                  "});",
+                  "pm.test('token 只在 Cookie 里，响应体不回传', () => {",
+                  "  pm.expect(body).to.not.have.property('accessToken');",
+                  "  pm.expect(body).to.not.have.property('refreshToken');",
+                  "});",
+                  "pm.test('已下发 access / csrf Cookie', () => {",
+                  "  pm.expect(pm.cookies.get('sc_at')).to.be.a('string');",
+                  "  pm.expect(pm.cookies.get('sc_csrf')).to.be.a('string');",
+                  "});",
+                  "if (body.csrfToken) {",
+                  "  pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"password\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "logon"]
+            },
+            "description": "密码登录。成功后下发三个 Cookie：\n  sc_at   (HttpOnly, Path=/)\n  sc_rt   (HttpOnly, Path=/user/token)\n  sc_csrf (可读, Path=/)\n并自动把响应里的 csrfToken 写入集合变量。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /user/me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且返回当前用户', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "me"]
+            },
+            "description": "依赖 Cookie 里的 access token 认证，无需手动加 Authorization 头。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /user/csrf",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且拿到 csrfToken', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const token = pm.response.json().csrfToken;",
+                  "  pm.expect(token).to.be.a('string');",
+                  "  if (token) pm.collectionVariables.set('csrfToken', token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/csrf",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "csrf"]
+            },
+            "description": "刷新页面后 SPA 用这个接口把 CSRF token 取回来（跨子域部署时 Cookie 读不到）。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/token/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且换发新 token', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.csrfToken) {",
+                  "  pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "}",
+                  "pm.test('refresh token 已旋转', () => {",
+                  "  pm.expect(pm.cookies.get('sc_rt')).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "", "options": { "raw": { "language": "text" } } },
+            "url": {
+              "raw": "{{baseUrl}}/user/token/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "token", "refresh"]
+            },
+            "description": "用 sc_rt Cookie 换新的 access token（并旋转 refresh token）。\n需要 X-CSRF-Token，由集合 pre-request 脚本自动注入。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/password/change",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 修改成功', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('password', pm.collectionVariables.get('newPassword'));",
+                  "console.log('密码已改为 ' + pm.collectionVariables.get('newPassword') + '（后续请求会自动使用新密码）');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{password}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/password/change",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "password", "change"]
+            },
+            "description": "已有密码时必须带 currentPassword。成功后会把「除当前会话外」的其他会话踢掉（返回 revokedSessions 数量）。\n\n该请求会把集合变量 password 更新为 newPassword，方便后续复用。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "", "options": { "raw": { "language": "text" } } },
+            "url": {
+              "raw": "{{baseUrl}}/user/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "logout"]
+            },
+            "description": "吊销 refresh token family + 把当前 access token 的 jti 写入黑名单，并清除 Cookie。\n需要 X-CSRF-Token（自动注入）。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /user/me（登出后应 401）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 —— jti 黑名单立即生效', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "me"]
+            },
+            "description": "反向验证：登出后同一个 access token 不能再访问（jti 黑名单）。如果这里返回 200，说明黑名单没生效。"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 · 验证码登录（首次自动开户）",
+      "description": "用 /user/otp 给一个全新邮箱发码，再用验证码登录，验证「首次登录自动创建用户」。\n注意：register 已发过 verify_email 验证码，这里用的是 purpose=logon，两者冷却互不影响。",
+      "item": [
+        {
+          "name": "POST /user/otp（purpose=logon）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('返回有效期', () => {",
+                  "  pm.expect(pm.response.json().expiresInSeconds).to.be.a('number');",
+                  "});",
+                  "console.log('验证码已发往 ' + pm.collectionVariables.get('otpEmail') + '，请到服务端控制台取码并填入 logonCode 变量');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{otpEmail}}\",\n  \"purpose\": \"logon\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "otp"]
+            },
+            "description": "发送登录验证码。即使邮箱未注册也会发送（首次登录会自动开户），响应始终 202 以防枚举。\n\n60 秒内重复请求会返回 429（带 Retry-After）。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/logon（otp）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('首次登录已自动开户且邮箱已验证', () => {",
+                  "  pm.expect(body.user.email).to.eql(pm.collectionVariables.get('otpEmail'));",
+                  "  pm.expect(body.user.emailVerified).to.be.true;",
+                  "});",
+                  "if (body.csrfToken) {",
+                  "  pm.collectionVariables.set('csrfToken', body.csrfToken);",
+                  "}",
+                  "pm.test('已下发 Cookie', () => {",
+                  "  pm.expect(pm.cookies.get('sc_at')).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grant_type\": \"otp\",\n  \"email\": \"{{otpEmail}}\",\n  \"otp\": \"{{logonCode}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/logon",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "logon"]
+            },
+            "description": "把控制台里的 6 位登录验证码填到集合变量 logonCode。\n验证码一次性，失败 5 次即作废。"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /user/me（OTP 会话）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 且为 OTP 开户的账号', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().user.email).to.eql(pm.collectionVariables.get('otpEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "me"]
+            },
+            "description": "换用新会话的 Cookie 访问当前用户。"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /user/logout（OTP 会话）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "", "options": { "raw": { "language": "text" } } },
+            "url": {
+              "raw": "{{baseUrl}}/user/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "logout"]
+            },
+            "description": "结束 OTP 会话。"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

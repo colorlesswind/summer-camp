@@ -1,0 +1,422 @@
+@import './application-shell.css';
+
+/* -------------------------------------------------------------------------- */
+/* Main / header                                                               */
+/* -------------------------------------------------------------------------- */
+
+.application-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.application-header__number {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.application-header__number strong {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.application-header__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.application-header__status {
+  justify-self: end;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.application-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.application-alerts__list {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.application-body {
+  padding-top: 20px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sticky section navigation                                                   */
+/* -------------------------------------------------------------------------- */
+
+.section-nav-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+}
+
+.section-nav {
+  display: flex;
+  width: 100%;
+}
+
+.section-nav__item {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 6px 9px;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: normal;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.section-nav__item:hover {
+  color: var(--brand-blue);
+  background: #fafafa;
+}
+
+.section-nav__item.is-active {
+  font-weight: 600;
+  color: var(--brand-blue);
+  border-bottom-color: var(--brand-blue);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Form sections / fields                                                      */
+/* -------------------------------------------------------------------------- */
+
+.application-form {
+  padding-top: 24px;
+}
+
+.form-section {
+  margin-bottom: 34px;
+}
+
+.form-section__title {
+  margin: 0 0 18px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text);
+  background: #ffffff;
+  border: 1px solid var(--color-divider);
+  border-radius: 2px;
+}
+
+.form-section__hint {
+  margin: -10px 0 14px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.form-field {
+  width: 100%;
+  max-width: 640px;
+  margin-bottom: 18px;
+}
+
+.form-field--wide {
+  max-width: 100%;
+}
+
+.form-field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.form-field__required {
+  margin-left: 4px;
+  color: #cf1322;
+}
+
+.form-field__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.form-field__control {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.form-field__control:only-child {
+  flex-basis: 100%;
+}
+
+.form-field__sub-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.form-field__error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #cf1322;
+}
+
+.form-field__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+/* 管理端/导师端只读文本（presentation="text"）：长文本完整换行，不截断 */
+.form-field__text {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.form-field__text--empty {
+  color: #8c8c8c;
+}
+
+.form-field__text--link {
+  color: var(--brand-blue);
+  text-decoration: none;
+}
+
+.form-field__text--link:hover {
+  text-decoration: underline;
+}
+
+/* 控件宽度统一撑满字段容器；日期/下拉/数字输入框共用 */
+.application-form .ant-input,
+.application-form .ant-input-number,
+.application-form .ant-picker,
+.application-form .ant-select {
+  width: 100%;
+}
+
+.application-form .ant-input-textarea-show-count {
+  width: 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repeatable tables                                                           */
+/* -------------------------------------------------------------------------- */
+
+.repeat-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-divider);
+}
+
+.repeat-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.repeat-table th,
+.repeat-table td {
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.repeat-table th {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: #fafafa;
+  white-space: nowrap;
+}
+
+.repeat-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.repeat-table__action {
+  width: 84px;
+  white-space: nowrap;
+}
+
+.repeat-table__empty {
+  padding: 18px 8px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.repeat-table__footer {
+  margin-top: 8px;
+}
+
+.repeat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.repeat-cell--group {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.repeat-cell__item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.repeat-cell .form-field__error {
+  margin-top: 2px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Statement                                                                   */
+/* -------------------------------------------------------------------------- */
+
+.statement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.statement-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.statement-item .ant-checkbox-wrapper {
+  align-items: flex-start;
+}
+
+.statement-item__text {
+  display: block;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--color-text);
+}
+
+.statement-item__value {
+  margin: 0;
+}
+
+.statement-item__agreed {
+  font-size: 13px;
+  font-weight: 600;
+  color: #389e0d;
+}
+
+.statement-item__declined {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cf1322;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Footer                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.application-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-divider);
+}
+
+.application-footer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.application-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Responsive                                                                  */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .section-nav {
+    overflow-x: auto;
+  }
+
+  .section-nav__item {
+    flex: 0 0 130px;
+    min-width: 130px;
+  }
+}
+
+@media (max-width: 640px) {
+  .application-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 14px 0 12px;
+  }
+
+  .application-header__title {
+    grid-row: 1;
+    font-size: 18px;
+    text-align: left;
+  }
+
+  .application-header__status {
+    justify-self: start;
+  }
+
+  .application-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .application-footer__actions {
+    justify-content: flex-end;
+  }
+
+  .form-field {
+    max-width: 100%;
+  }
+
+  .form-field__control {
+    flex-basis: 100%;
+  }
+}

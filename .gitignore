@@ -1,0 +1,10 @@
+笔试题-全栈.md
+
+# 本地 npm 缓存（沙箱环境需要把 cache 放在工作区内时使用）
+.npm-cache/
+
+# Windows 文件权限修复的备份/回滚记录，不属于源码
+.acl-recovery/
+
+# 测试产物
+coverage/

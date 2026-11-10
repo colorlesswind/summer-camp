@@ -1,0 +1,25 @@
+# 依赖与产物由镜像内部自己生成，不需要进构建上下文
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# 绝不把密钥打进镜像
+.env
+.env.*
+*.pem
+
+# 只在本地开发/联调时用
+test
+scripts
+postman
+README.md
+
+# 日志与杂项
+*.log
+npm-debug.log*
+.DS_Store
+.git
+.gitignore
+Dockerfile
+.dockerignore

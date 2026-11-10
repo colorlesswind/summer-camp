@@ -1,0 +1,38 @@
+{
+  "name": "summer-camp-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Summer Camp SPA: Vue 3 + TypeScript + Vite + Ant Design Vue",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "ant-design-vue": "^4.2.6",
+    "axios": "^1.7.9",
+    "dayjs": "^1.11.23",
+    "pinia": "^3.0.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.7.0",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "~5.9.2",
+    "vite": "^7.0.0",
+    "vitest": "^5.1.0",
+    "vue-tsc": "^3.0.0"
+  }
+}
