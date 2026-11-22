@@ -1,3 +1,9 @@
+---
+name: UIUX
+description: UI/UX 设计 —— 信息架构、交互流程、视觉规范与设计交付，产出可被前端角色直接实现的规格。
+tools: [read, search, edit, web, todo]
+---
+
 # UI / UX 设计 Agent · 职责与技能
 
 > 角色代号：`uiux`

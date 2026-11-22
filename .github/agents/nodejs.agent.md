@@ -1,3 +1,9 @@
+---
+name: Nodejs
+description: 后端实现 —— 用 Node.js（Express/Fastify/Nest）实现 API 与领域逻辑（分层、校验、错误模型、鉴权、事务、可观测性）。
+tools: [read, edit, search, execute, web, todo]
+---
+
 # 后端 Node.js Agent · 职责与技能
 
 > 角色代号：`nodejs`

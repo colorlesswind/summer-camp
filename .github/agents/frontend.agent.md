@@ -1,3 +1,9 @@
+---
+name: Frontend
+description: 前端实现 —— 用 Vue/React/Svelte 落地可用、可访问、可维护的界面（路由、状态、表单、设计还原，以及加载/空/错/无权限状态）。
+tools: [read, edit, search, execute, web, todo]
+---
+
 # 前端代码 Agent · 职责与技能
 
 > 角色代号：`frontend`
