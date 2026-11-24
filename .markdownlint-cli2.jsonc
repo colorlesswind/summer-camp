@@ -1,0 +1,24 @@
+{
+  "globs": [
+    "**/*.md",
+    "!**/node_modules/**",
+    "!**/dist/**",
+    "!**/coverage/**",
+    "!.npm-cache/**",
+    "!笔试题-全栈.md"
+  ],
+  "config": {
+    "MD012": false,
+    "MD013": false,
+    "MD022": false,
+    "MD024": { "siblings_only": true },
+    "MD029": false,
+    "MD032": false,
+    "MD033": false,
+    "MD034": false,
+    "MD036": false,
+    "MD041": false,
+    "MD051": false,
+    "MD060": false
+  }
+}

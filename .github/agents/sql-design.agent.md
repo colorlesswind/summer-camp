@@ -1,8 +1,15 @@
+---
+name: SqlDesign
+description: 数据设计 —— 设计关系型数据模型、约束、索引与迁移（MySQL/PostgreSQL），守住数据一致性与可回滚。
+tools: [read, search, edit, todo]
+---
+
 # 数据库结构设计 Agent · 职责与技能
 
 > 角色代号：`sql-design`
 > 适用场景：为业务系统设计关系型数据模型、约束、索引与迁移（MySQL / PostgreSQL）
 > 使用方式：把本文作为该角色的工作契约与能力基线；数据库品牌可替换，职责、产出与质量门禁不变。
+> 强制流程：改动已有业务逻辑前按 [AGENTS.md](../../AGENTS.md) §2 检索 `docs/invariants.md` 与 `docs/decisions/`；收工按 §6 更新约束、填 PR 描述并更新 `CHANGELOG.md`。
 
 ---
 

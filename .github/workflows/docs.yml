@@ -1,0 +1,55 @@
+name: docs
+
+# 先以 warning 模式运行：步骤失败不会阻断 PR。
+# 观察两周后，把两个步骤的 `continue-on-error` 删掉即可切换为 blocking。
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'server/src/**'
+      - 'ui/src/**'
+      - '.markdownlint-cli2.jsonc'
+      - 'scripts/check-docs.mjs'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - '.markdownlint-cli2.jsonc'
+      - 'scripts/check-docs.mjs'
+      - '.github/workflows/docs.yml'
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: markdownlint（warning，非阻断）
+        continue-on-error: true
+        run: npx --yes markdownlint-cli2
+
+      - name: 文档一致性与不变量校验（warning，非阻断）
+        continue-on-error: true
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-docs.mjs

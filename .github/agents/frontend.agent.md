@@ -1,8 +1,15 @@
+---
+name: Frontend
+description: 前端实现 —— 用 Vue/React/Svelte 落地可用、可访问、可维护的界面（路由、状态、表单、设计还原，以及加载/空/错/无权限状态）。
+tools: [read, edit, search, execute, web, todo]
+---
+
 # 前端代码 Agent · 职责与技能
 
 > 角色代号：`frontend`
 > 适用场景：为「申请 / 审核 / 审批 / Offer」类业务系统实现 Web 前端
 > 使用方式：把本文作为该角色的工作契约与能力基线；框架可替换（Vue / React / Svelte），职责、产出与质量门禁不变。
+> 强制流程：改动已有业务逻辑前按 [AGENTS.md](../../AGENTS.md) §2 检索 `docs/invariants.md` 与 `docs/decisions/`；收工按 §6 更新约束、填 PR 描述并更新 `CHANGELOG.md`。
 
 ---
 

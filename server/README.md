@@ -93,7 +93,7 @@ node dist/bootstrap/seed-cli.js && BOOTSTRAP_ON_START=false node dist/index.js
 
 ## 3. 目录结构
 
-```
+```text
 server/src
 ├── index.ts                  # 进程入口：启动 + 优雅关闭
 ├── app.ts                    # express 装配（helmet / cors / cookie / 错误处理）
@@ -683,7 +683,7 @@ Education / Awards / Supporting Documents / English Proficiency 按题目要求�
 > - `Submit` 占 1 个名额；`Resubmit` 导师未变不重复占用，换导师在同一事务内释放旧 + 占用新；
 >   `Supervisor Reject` / 学生 `Decline Offer` 释放；
 > - 名额用 `supervisors.quota_capacity` 配置（默认 50），迁移见 `src/db/migrations/006_supervisor_quota.sql`；
-> - 并发实现、锁顺序与约 500 并发 `Submit` 的处理方案见 [`docs/quota-design.md`](../docs/quota-design.md)，
+> - 并发实现、锁顺序与约 500 并发 `Submit` 的处理方案见 [ADR-0005](../docs/decisions/ADR-0005-quota-atomic-update.md) 与 [INV-09 ~ INV-12](../docs/invariants.md)，
 >   可执行 `npm run smoke:quota` 做并发冒烟。
 
 ### 10.10 导师账号绑定（否则导师端看不到任何申请）
