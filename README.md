@@ -1,6 +1,6 @@
 # summer-camp
 
-```
+```text
 summer-camp
 ├── server/   # Express + TypeScript 服务端（认证 /user + 申请表 /form，接口见 server/README.md）
 └── ui/       # Vue 3 + Vite 前端 SPA（登录 / 学生申请表 / Application Status / 管理端 / 导师端）
@@ -10,6 +10,9 @@ summer-camp
 
 ## 目录
 
+- [文档与协作流程](#文档与协作流程)
+  - [各文档的职责](#各文档的职责)
+  - [从调用 Agent 到合并 PR](#从调用-agent-到合并-pr)
 - [重要提醒：申请表必须选择预设的两个 supervisor](#注意---在填写申请表的时候必须要选择预设的两个supervisor否则application-form的流程不能完成)
 - [用角色 Agent 构建系统（工作流）](#用角色-agent-构建系统工作流)
 - [演示模式](#演示模式)
@@ -24,21 +27,90 @@ summer-camp
 
 ## 用角色 Agent 构建系统（工作流）
 
-[`docs/`](./docs) 下每份 `<role>-agent.md` 是「职责 + 技能 + 产出 + DoD」的工作契约。把对应文档作为该角色的规则，按下面顺序把上一阶段产物作为下一阶段输入：
+[`docs/`](./docs) 下的文档说明项目约束与决策；角色契约在 [`.github/agents/`](./.github/agents)，所有角色的共同规则见 [AGENTS.md](./AGENTS.md)。把对应文档作为该角色的规则，按下面顺序把上一阶段产物作为下一阶段输入：
 
 | 阶段 | 角色 | 输入 → 产出 |
 | --- | --- | --- |
-| 1 拆解需求 | [architecture-agent](./docs/architecture-agent.md) | 需求原文 → 范围、角色矩阵、状态机、验收标准、非目标 |
-| 2 分析系统组成 | [architecture-agent](./docs/architecture-agent.md) | 领域模型 → 模块边界、接口契约、数据策略、构建顺序、部署/回滚 |
-| 3 UI/UX 设计 | [uiux-agent](./docs/uiux-agent.md) | 流程与状态 → 页面清单、线框/视觉、状态矩阵、英文文案 |
-| 4 Node.js coding | [nodejs-agent](./docs/nodejs-agent.md) | 契约 + 数据模型 → API、校验、事务、权限、错误码、审计 |
-| 5 UI coding | [frontend-agent](./docs/frontend-agent.md) | 契约 + 设计规格 → 路由、页面、表单、联调 |
-| 6 测试 / Postman | [func-test-agent](./docs/func-test-agent.md) | 契约 + 用例矩阵 → 生成/更新 Postman collection、执行结果、缺陷 |
+| 1 拆解需求 | [architecture-agent](./.github/agents/architecture.agent.md) | 需求原文 → 范围、角色矩阵、状态机、验收标准、非目标 |
+| 2 分析系统组成 | [architecture-agent](./.github/agents/architecture.agent.md) | 领域模型 → 模块边界、接口契约、数据策略、构建顺序、部署/回滚 |
+| 3 UI/UX 设计 | [uiux-agent](./.github/agents/uiux.agent.md) | 流程与状态 → 页面清单、线框/视觉、状态矩阵、英文文案 |
+| 4 Node.js coding | [nodejs-agent](./.github/agents/nodejs.agent.md) | 契约 + 数据模型 → API、校验、事务、权限、错误码、审计 |
+| 5 UI coding | [frontend-agent](./.github/agents/frontend.agent.md) | 契约 + 设计规格 → 路由、页面、表单、联调 |
+| 6 测试 / Postman | [func-test-agent](./.github/agents/func-test.agent.md) | 契约 + 用例矩阵 → 生成/更新 Postman collection、执行结果、缺陷 |
 
 - 阶段 2、3 可并行；4、5 在契约冻结后并行；6 从阶段 1 就开始写用例，不等代码完成。
 - 契约变更回阶段 1 更新，再同步 4/5/6，避免各角色各打补丁。
 - 每阶段出口：勾选该角色文档的 DoD，并至少有一条真实请求、页面或断言验证通过。
-- 数据库设计由 [sql-design-agent](./docs/sql-design-agent.md) 在阶段 2 后介入，产出模型、约束、索引与迁移。
+- 数据库设计由 [sql-design-agent](./.github/agents/sql-design.agent.md) 在阶段 2 后介入，产出模型、约束、索引与迁移。
+
+## 文档与协作流程
+
+### 各文档的职责
+
+| 文档 | 作用 | 什么时候写 | 权威层级 |
+| --- | --- | --- | --- |
+| [AGENTS.md](./AGENTS.md) | 所有 AI agent 的唯一工作规则：检索顺序、改动约束、收工流程、权威顺序 | 规则本身变化时（少见） | 流程规则 |
+| [.github/agents/*.agent.md](./.github/agents) | 六个角色契约：职责、技能、产出、DoD | 角色职责或 DoD 变化时 | 流程规则，低于 `AGENTS.md` |
+| [docs/README.md](./docs/README.md) | 文档导航、四类文档分工、选择决策树 | 新增或调整文档类型时 | 索引 |
+| [docs/invariants.md](./docs/invariants.md) | 现行业务约束的唯一登记表（INV-01 ~ INV-22）：一句话规则 + 代码锚点 + 测试锚点 | 业务规则增删改时**就地更新** | 低于代码/测试与 `Accepted` ADR |
+| [docs/decisions/](./docs/decisions/) | ADR：背景、选项、决策、理由、后果、回滚；不可直接改写 | 跨模块契约或难以反转的决策变化 | 低于代码/测试，高于 `invariants.md` |
+| [docs/test-matrix.md](./docs/test-matrix.md) | 需求追踪、状态真值表、展示矩阵、用例矩阵、发布门禁 | 需求或用例变化时 | 测试依据 |
+| [server/README.md](./server/README.md) | 接口、错误码、运行方式说明 | 接口契约变化时同步 | 说明性文档 |
+| [.github/pull_request_template.md](./.github/pull_request_template.md) | PR 描述结构：变更类型、INV 前后对比、验证、回滚 | 模板本身变化时（少见） | 模板 |
+| `.git/pr-body-分支名.md` | agent 生成的 PR 描述草稿，**只在本机、不入库** | 每次开 PR 前 | 草稿 |
+| [CHANGELOG.md](./CHANGELOG.md) | 面向使用者的版本变更记录（Keep a Changelog） | 有用户可见变化时更新 `[Unreleased]` | 发布记录 |
+| [.agent-history/](./.agent-history/ARCHIVE.md) | 2026-11-24 之前的会话历史，只读归档 | 只读，不再新增 | 最低，仅作背景 |
+
+### 从调用 Agent 到合并 PR
+
+```mermaid
+flowchart TD
+    A["在 Copilot Chat 选择角色<br/>例：Nodejs / Frontend / FuncTest"] --> B["按 AGENTS.md §2 检索<br/>docs/invariants.md + Accepted ADR"]
+    B --> C{"与既有约束冲突？"}
+    C -- "是" --> C1["停止编码<br/>输出冲突点 / 影响面 / 选项"]
+    C1 --> Z["等用户确认后再继续"]
+    C -- "否" --> D["在功能分支修改代码"]
+    D --> E["运行验证<br/>typecheck / test / smoke"]
+    E --> F{"业务约束有变化？"}
+    F -- "是" --> F1["就地更新 docs/invariants.md<br/>改 INV 条目 + 变更记录"]
+    F -- "否" --> G
+    F1 --> G{"跨模块或难以反转的决策？"}
+    G -- "是" --> G1["新增 ADR<br/>旧 ADR 标 Superseded"]
+    G -- "否" --> H
+    G1 --> H{"有用户可见变化？"}
+    H -- "是" --> H1["更新 CHANGELOG.md 的<br/>[Unreleased]"]
+    H -- "否" --> H2["PR 模板勾选<br/>skip-changelog"]
+    H1 --> I["git commit（Conventional Commits）<br/>git push 功能分支"]
+    H2 --> I
+    I --> J["Agent 按 PR 模板生成草稿<br/>.git/pr-body-分支名.md"]
+    J --> K{"选择建 PR 的方式"}
+    K -- "命令行" --> K1["gh pr create --body-file<br/>.git/pr-body-分支名.md"]
+    K -- "网页" --> K2["GitHub 新建 PR<br/>复制草稿内容粘贴到描述框"]
+    K1 --> L["docs CI（当前 warning）<br/>node scripts/check-docs.mjs"]
+    K2 --> L
+    L --> M["评审 → Squash merge<br/>PR 描述进入提交信息"]
+    M --> N["发布时把 [Unreleased]<br/>改为版本号与日期"]
+```
+
+关键约定：
+
+- 草稿只放 `.git/pr-body-<分支名>.md`（文件名以 `pr-` 开头即可，Windows 用 `.git\`）。`.git/` 不受版本控制，不会把草稿提交进仓库。
+- 生成草稿前，让 agent 读取 `git diff --stat origin/main...HEAD`、验证日志和本次 INV 变更；「验证」一节只写真实执行过的命令与结果。
+- 网页建 PR 时：先创建 PR，再用 `Get-Content` 读取草稿并粘贴；已有 PR 可直接用 `gh pr edit` 覆盖描述。
+
+```powershell
+git fetch origin main
+git diff --stat origin/main...HEAD
+git --no-pager diff origin/main...HEAD > .git\change.diff
+# 让 agent 读 change.diff、验证日志与 INV 变更，写出 .git\pr-body-当前分支名.md
+
+# 网页建 PR 时复制到剪贴板
+Get-Content .git\pr-body-当前分支名.md -Raw | Set-Clipboard
+
+# 或用命令行建 PR / 更新已有 PR 的描述
+gh pr create --base main --title "feat(server): ..." --body-file .git\pr-body-当前分支名.md
+gh pr edit 123 --body-file .git\pr-body-当前分支名.md
+```
 
 ## 演示模式
 
@@ -88,10 +160,31 @@ npm run dev        # http://localhost:5173
 >   -p 3306:3306 \
 >   -e MYSQL_ROOT_PASSWORD=devpass \
 >   -e MYSQL_DATABASE=summer_camp \
->   mysql:8.0
+>   mysql:8.4
 > ```
 >
 > 然后让 `server/.env` 与之一致：`MYSQL_HOST=127.0.0.1`、`MYSQL_PORT=3306`、`MYSQL_USER=root`、`MYSQL_PASSWORD=devpass`。
+>
+> 如果想连容器底下的匿名数据卷一起丢掉、完全从零开始，直接重建容器即可：
+>
+> ```bash
+> docker rm -f summer-camp-mysql
+> # 再执行一次上面那条 docker run 命令
+> ```
+>
+> （推荐）也可以一开始就把数据放进具名卷，之后想清空只需删卷：
+>
+> ```bash
+> docker run -d --name summer-camp-mysql \
+>   -p 3306:3306 \
+>   -e MYSQL_ROOT_PASSWORD=devpass \
+>   -e MYSQL_DATABASE=summer_camp \
+>   -v summer-camp-mysql-data:/var/lib/mysql \
+>   mysql:8.4
+>
+> # 清空数据：删容器 + 删卷，然后重跑上面的 docker run
+> docker rm -f summer-camp-mysql && docker volume rm summer-camp-mysql-data
+> ```
 
 ```bash
 # 后端

@@ -9,6 +9,7 @@ tools: [read, edit, search, execute, web, todo]
 > 角色代号：`nodejs`
 > 适用场景：为业务系统实现 Node.js API 与领域逻辑（Express / Fastify / Nest 均可）
 > 使用方式：把本文作为该角色的工作契约与能力基线；框架和数据库驱动可替换，职责、产出与质量门禁不变。
+> 强制流程：改动已有业务逻辑前按 [AGENTS.md](../../AGENTS.md) §2 检索 `docs/invariants.md` 与 `docs/decisions/`；收工按 §6 更新约束、填 PR 描述并更新 `CHANGELOG.md`。
 
 ---
 
